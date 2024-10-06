@@ -27,6 +27,7 @@ This module supports two output formats:
 import os
 from functools import partial
 from glob import glob
+from typing import TextIO
 
 import attrs
 import numpy as np
@@ -83,19 +84,27 @@ class PDBWriter:
 
     def dump_each(self, atpos: ArrayLike, cell_lengths: ArrayLike):
         """Write a snapshot to the PDB file without considering `self.stride`."""
+        with open(self.path_pdb, "a") as fh:
+            self._dump_low(fh, atpos, cell_lengths)
+
+    def dump_single(self, path_pdb: str, atpos: ArrayLike, cell_lengths: ArrayLike):
+        """Dump a single snapshot with the same settings to a different file."""
+        with open(path_pdb, "w") as fh:
+            self._dump_low(fh, atpos, cell_lengths)
+
+    def _dump_low(self, fh: TextIO, atpos: ArrayLike, cell_lengths: ArrayLike):
         atpos = parse_atpos(atpos, len(self.atnums))
         cell_lengths = parse_cell_lengths(cell_lengths)
-        with open(self.path_pdb, "a") as fh:
-            a, b, c = cell_lengths * self.to_angstrom
-            print(f"CRYST1{a:9.3f}{b:9.3f}{c:9.3f}  90.00  90.00  90.00 P 1           1", file=fh)
-            for i, (x, y, z) in enumerate(atpos * self.to_angstrom):
-                symbol = SYMBOLS[self.atnums[i] - 1]
-                print(
-                    f"HETATM{i+1:5d} {symbol:2s}   ATM     1    {x:8.3f}{y:8.3f}{z:8.3f}"
-                    f"  1.00  1.00          {symbol:2s}",
-                    file=fh,
-                )
-            print("END", file=fh)
+        a, b, c = cell_lengths * self.to_angstrom
+        print(f"CRYST1{a:9.3f}{b:9.3f}{c:9.3f}  90.00  90.00  90.00 P 1           1", file=fh)
+        for i, (x, y, z) in enumerate(atpos * self.to_angstrom):
+            symbol = SYMBOLS[self.atnums[i] - 1]
+            print(
+                f"HETATM{i+1:5d} {symbol:2s}   ATM     1    {x:8.3f}{y:8.3f}{z:8.3f}"
+                f"  1.00  1.00          {symbol:2s}",
+                file=fh,
+            )
+        print("END", file=fh)
 
 
 @attrs.define

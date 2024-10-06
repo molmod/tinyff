@@ -7,10 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Add a `stride` option to the trajectory writers.
+- Add method `dump_single` method to `PDBWriter` to write one-off file with a single snapshot.
+
 ### Changed
 
 - By default, run only 100 optimization steps in `build_random_cell`.
-- Add a `stride` option to the trajectory writers.
 
 ## [0.0.0] - 2024-10-06
 

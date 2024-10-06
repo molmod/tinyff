@@ -79,6 +79,26 @@ def test_pdb_writer_stride(tmpdir):
         assert fh.read().count("CRYST1") == 3
 
 
+PDB_REF_SINGLE = """\
+CRYST1   10.000   10.000   10.000  90.00  90.00  90.00 P 1           1
+HETATM    1 Ar   ATM     1       3.000   4.000   5.000  1.00  1.00          Ar
+HETATM    2 Ar   ATM     1       6.000   7.000   3.142  1.00  1.00          Ar
+END
+"""
+
+
+def test_pdb_writer_single(tmpdir):
+    cell_length = 10.0
+    atpos = np.array([[3.0, 4.0, 5.0], [6.0, 7.0, 3.1415]])
+    path_pdb = os.path.join(tmpdir, "test.pdb")
+    path_other = os.path.join(tmpdir, "other.pdb")
+    pdb_writer = PDBWriter(path_pdb, to_angstrom=1.0, atnums=[18] * len(atpos), stride=5)
+    pdb_writer.dump_single(path_other, atpos, cell_length)
+
+    with open(path_other) as fh:
+        assert fh.read() == PDB_REF_SINGLE
+
+
 def test_npy_traj(tmpdir):
     traj_atpos = np.array([[[1.2, 1.3], [4.9, 3.1]], [[0.7, 8.1], [-7.9, 0.5]]])
     traj_pressure = np.array([5.0, 4.0])
