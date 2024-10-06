@@ -67,6 +67,18 @@ def test_pdb_writer(tmpdir):
     assert data == PDB_REF_DATA
 
 
+def test_pdb_writer_stride(tmpdir):
+    cell_length = 3.0
+    atpos = np.zeros((4, 3))
+    path_pdb = os.path.join(tmpdir, "test.pdb")
+    pdb_writer = PDBWriter(path_pdb, to_angstrom=10.0, atnums=[18] * len(atpos), stride=5)
+    for _ in range(11):
+        pdb_writer.dump(atpos, cell_length)
+
+    with open(path_pdb) as fh:
+        assert fh.read().count("CRYST1") == 3
+
+
 def test_npy_traj(tmpdir):
     traj_atpos = np.array([[[1.2, 1.3], [4.9, 3.1]], [[0.7, 8.1], [-7.9, 0.5]]])
     traj_pressure = np.array([5.0, 4.0])
@@ -80,3 +92,11 @@ def test_npy_traj(tmpdir):
         # Load and check
         assert np.load(os.path.join(tmpdir, "out/pressure.npy")) == pytest.approx(traj_pressure)
         assert np.load(os.path.join(tmpdir, "out/atpos.npy")) == pytest.approx(traj_atpos)
+
+
+def test_npy_traj_stride(tmpdir):
+    traj_foo = np.array([1, 2, 3, 4, 5, 6, 7])
+    npy_writer = NPYWriter(os.path.join(tmpdir, "out"), stride=3)
+    for foo in traj_foo:
+        npy_writer.dump(foo=foo)
+    assert (np.load(os.path.join(tmpdir, "out/foo.npy")) == [1, 4, 7]).all()

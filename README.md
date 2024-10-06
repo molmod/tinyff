@@ -166,12 +166,11 @@ print(np.mean(pressure))
 ```
 
 Irrespective of the file format,
-it is recommended to write trajectory data only every `nstride` steps,
-where `nstride` is a parameter you configure, using something along the following lines:
+it is recommended to write trajectory data only every so many steps.
+The constructors of both trajectory writers have an optional `stride` argument
+to control the frequency of the output.
+For example:
 
 ```python
-nstride = 100
-for istep in range(10000):
-    if istep % nstride == 0:
-        # Here comes your code to write a frame to one or more trajectory files.
+npy_writer = NPYWriter("traj", stride=100)
 ```

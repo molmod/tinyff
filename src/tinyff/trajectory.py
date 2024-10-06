@@ -61,12 +61,28 @@ class PDBWriter:
     """Conversion factor to be multiplied with positions to get value in Angstrom, 1e-10 neter."""
 
     atnums: NDArray[float] = attrs.field(converter=partial(np.asarray, dtype=int), kw_only=True)
+    """Atomic numbers of the atoms in the PDB file."""
+
+    stride: int = attrs.field(
+        default=1, kw_only=True, converter=int, validator=attrs.validators.gt(0)
+    )
+    """The number of steps in between each write."""
+
+    counter: int = attrs.field(default=0, init=False, converter=int)
+    """Internal counter to support the implementation of the stride option."""
 
     def __attrs_post_init__(self):
         if os.path.isfile(self.path_pdb):
             os.unlink(self.path_pdb)
 
     def dump(self, atpos: ArrayLike, cell_lengths: ArrayLike):
+        """Write a snapshot to the PDB file, every `self.stride` steps."""
+        if self.counter % self.stride == 0:
+            self.dump_each(atpos, cell_lengths)
+        self.counter += 1
+
+    def dump_each(self, atpos: ArrayLike, cell_lengths: ArrayLike):
+        """Write a snapshot to the PDB file without considering `self.stride`."""
         atpos = parse_atpos(atpos, len(self.atnums))
         cell_lengths = parse_cell_lengths(cell_lengths)
         with open(self.path_pdb, "a") as fh:
@@ -99,6 +115,14 @@ class NPYWriter:
     fields: dict[str] = attrs.field(init=False, factory=dict)
     """Fields to be written at every dump call."""
 
+    stride: int = attrs.field(
+        default=1, kw_only=True, converter=int, validator=attrs.validators.gt(0)
+    )
+    """The number of steps in between each write."""
+
+    counter: int = attrs.field(default=0, init=False, converter=int)
+    """Internal counter to support the implementation of the stride option."""
+
     def __attrs_post_init__(self):
         if os.path.isdir(self.dir_out):
             for path in glob(os.path.join(self.dir_out, "*.npy")):
@@ -109,6 +133,13 @@ class NPYWriter:
         os.makedirs(self.dir_out)
 
     def dump(self, **kwargs):
+        """Write data to NPY files, every `self.stride` steps."""
+        if self.counter % self.stride == 0:
+            self.dump_each(**kwargs)
+        self.counter += 1
+
+    def dump_each(self, **kwargs):
+        """Write data to NPY files without considering `self.stride`."""
         for key, value in kwargs.items():
             # Check array properties
             shape, dtype = self.fields.get(key, (None, None))

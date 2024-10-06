@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - By default, run only 100 optimization steps in `build_random_cell`.
-
+- Add a `stride` option to the trajectory writers.
 
 ## [0.0.0] - 2024-10-06
 
