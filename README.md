@@ -174,3 +174,8 @@ For example:
 ```python
 npy_writer = NPYWriter("traj", stride=100)
 ```
+
+
+## Change log
+
+The history of changes can be found in [CHANGELOG.md](CHANGELOG.md).
