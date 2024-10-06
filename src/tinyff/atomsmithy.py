@@ -94,7 +94,9 @@ class PushPotential(PairPotential):
         return energy, gdist
 
 
-def build_random_cell(cell_length: float, natom: int, rng: np.random.Generator | None = None):
+def build_random_cell(
+    cell_length: float, natom: int, *, maxiter: int = 100, rng: np.random.Generator | None = None
+):
     """Fill a cell with randomly placed atoms, avoiding close contacts."""
     # Start with completely random
     if rng is None:
@@ -110,6 +112,6 @@ def build_random_cell(cell_length: float, natom: int, rng: np.random.Generator |
         energy, force, _ = pwff(atpos, cell_length)
         return energy, -force.ravel()
 
-    # Optimize and return
-    sol = minimize(costgrad, atpos0.ravel(), jac=True)
+    # Optimize and return structure
+    sol = minimize(costgrad, atpos0.ravel(), jac=True, options={"maxiter": maxiter})
     return sol.x.reshape(-1, 3)

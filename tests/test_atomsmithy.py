@@ -109,6 +109,6 @@ def test_fcc_lattice():
 
 def test_random_box():
     rng = np.random.default_rng(42)
-    atpos = build_random_cell(10.0, 32, rng)
+    atpos = build_random_cell(10.0, 32, rng=rng)
     nlist = build_nlist_simple(atpos, [10.0, 10.0, 10.0], rcut=4.0)
     assert nlist["dist"].min() > 2.0
