@@ -1,3 +1,10 @@
+build_nlist[![release](https://github.com/molmod/tinyff/actions/workflows/release.yaml/badge.svg)](https://github.com/molmod/tinyff/actions/workflows/release.yaml)
+[![pytest](https://github.com/molmod/tinyff/actions/workflows/pytest.yaml/badge.svg)](https://github.com/molmod/tinyff/actions/workflows/pytest.yaml)
+[![mkdocs](https://github.com/molmod/tinyff/actions/workflows/mkdocs.yaml/badge.svg)](https://github.com/molmod/tinyff/actions/workflows/mkdocs.yaml)
+[![PyPI Version](https://img.shields.io/pypi/v/tinyff)](https://pypi.org/project/tinyff/)
+![PyPI - Python Version](https://img.shields.io/pypi/pyversions/tinyff)
+![GPL-3 License](https://img.shields.io/github/license/molmod/tinyff)
+
 # TinyFF
 
 This is a minimalistic force-field engine written in pure Python,
