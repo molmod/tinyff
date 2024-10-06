@@ -1,0 +1,5 @@
+# Ensure changes to these dependencies are reflected in pyproject.toml
+attrs==23.1.0
+npy-append-array==0.9.16
+numpy==1.23.5
+scipy==1.11.1
