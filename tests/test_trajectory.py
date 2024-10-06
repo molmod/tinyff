@@ -28,13 +28,13 @@ from tinyff.trajectory import NPYWriter, PDBWriter
 PDB_REF_DATA = """\
 CRYST1   30.000   30.000   30.000  90.00  90.00  90.00 P 1           1
 HETATM    1 Ar   ATM     1       0.000  20.000   5.000  1.00  1.00          Ar
-HETATM    2 Ar   ATM     1      10.000  33.000  24.400  1.00  1.00          Ar
-HETATM    3 Ar   ATM     1     -10.000  28.000  17.000  1.00  1.00          Ar
+HETATM    2 Ar   ATM     1      10.000   3.000  24.400  1.00  1.00          Ar
+HETATM    3 Ar   ATM     1      20.000  28.000  17.000  1.00  1.00          Ar
 END
 CRYST1   30.000   30.000   30.000  90.00  90.00  90.00 P 1           1
 HETATM    1 Ar   ATM     1       0.100  20.300   0.000  1.00  1.00          Ar
-HETATM    2 Ar   ATM     1      12.000  30.500  32.100  1.00  1.00          Ar
-HETATM    3 Ar   ATM     1     -10.300  35.800  20.300  1.00  1.00          Ar
+HETATM    2 Ar   ATM     1      12.000   0.500   2.100  1.00  1.00          Ar
+HETATM    3 Ar   ATM     1      19.700   5.800  20.300  1.00  1.00          Ar
 END
 """
 

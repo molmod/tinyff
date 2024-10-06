@@ -93,8 +93,12 @@ class PDBWriter:
             self._dump_low(fh, atpos, cell_lengths)
 
     def _dump_low(self, fh: TextIO, atpos: ArrayLike, cell_lengths: ArrayLike):
+        # Process arguments
         atpos = parse_atpos(atpos, len(self.atnums))
         cell_lengths = parse_cell_lengths(cell_lengths)
+        # Wrap atoms in cell for nicer visual
+        atpos -= np.floor(atpos / cell_lengths) * cell_lengths
+        # Actual writing
         a, b, c = cell_lengths * self.to_angstrom
         print(f"CRYST1{a:9.3f}{b:9.3f}{c:9.3f}  90.00  90.00  90.00 P 1           1", file=fh)
         for i, (x, y, z) in enumerate(atpos * self.to_angstrom):
