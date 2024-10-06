@@ -153,15 +153,24 @@ class NPYWriter:
 
     def dump_each(self, **kwargs):
         """Write data to NPY files without considering `self.stride`."""
-        for key, value in kwargs.items():
-            # Check array properties
-            shape, dtype = self.fields.get(key, (None, None))
-            arvalue = np.asarray(value)
-            if shape is None:
-                shape = arvalue.shape
-                dtype = arvalue.dtype
-                self.fields[key] = (shape, dtype)
-            else:
+        converted = {}
+        if len(self.fields) == 0:
+            # No checking, just record the given shapes and types
+            for key, value in kwargs.items():
+                arvalue = np.asarray(value)
+                converted[key] = arvalue
+                self.fields[key] = (arvalue.shape, arvalue.dtype)
+        else:
+            # Check kwargs
+            if set(self.fields) != set(kwargs):
+                raise TypeError(
+                    f"Received keys: {list(kwargs.keys())}. "
+                    f"Expected: {list(self.fields.keys())}"
+                )
+            for key, value in kwargs.items():
+                arvalue = np.asarray(value)
+                converted[key] = arvalue
+                shape, dtype = self.fields[key]
                 if shape != arvalue.shape:
                     raise TypeError(
                         f"The shape of {key}, {arvalue.shape}, differs from the first one, {shape}"
@@ -170,7 +179,9 @@ class NPYWriter:
                     raise TypeError(
                         f"The dtype of {key}, {arvalue.dtype}, differs from the first one, {dtype}"
                     )
-            # Append to NPY file
+
+        # Write only once all checks have passed
+        for key, value in converted.items():
             path = os.path.join(self.dir_out, f"{key}.npy")
             with NpyAppendArray(path, delete_if_exists=False) as npaa:
-                npaa.append(arvalue.reshape(1, *arvalue.shape))
+                npaa.append(value.reshape(1, *value.shape))

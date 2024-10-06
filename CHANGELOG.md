@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - By default, run only 100 optimization steps in `build_random_cell`.
 - Wrap atoms back into the cell when writing PDB trajectory files, for nicer visual.
+- Stricter consistency checking between multiple `dump` calls in `NPYWriter`.
 
 
 ## [0.0.0] - 2024-10-06

@@ -120,3 +120,24 @@ def test_npy_traj_stride(tmpdir):
     for foo in traj_foo:
         npy_writer.dump(foo=foo)
     assert (np.load(os.path.join(tmpdir, "out/foo.npy")) == [1, 4, 7]).all()
+
+
+def test_npy_traj_consistent_names(tmpdir):
+    npy_writer = NPYWriter(os.path.join(tmpdir, "out"))
+    npy_writer.dump(a=1, b=2)
+    with pytest.raises(TypeError):
+        npy_writer.dump(b=3, c=4)
+
+
+def test_npy_traj_consistent_shapes(tmpdir):
+    npy_writer = NPYWriter(os.path.join(tmpdir, "out"))
+    npy_writer.dump(a=[1, 2], b=3)
+    with pytest.raises(TypeError):
+        npy_writer.dump(a=3, b=4)
+
+
+def test_npy_traj_consistent_dtypes(tmpdir):
+    npy_writer = NPYWriter(os.path.join(tmpdir, "out"))
+    npy_writer.dump(a=1.0, b=3)
+    with pytest.raises(TypeError):
+        npy_writer.dump(a=3, b=4)
