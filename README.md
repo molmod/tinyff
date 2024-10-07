@@ -11,13 +11,15 @@ using vectorized NumPy code.
 It has minimal dependencies (NumPy, SciPy, attrs and npy-append-array),
 so all the force-field specific code is self-contained.
 
-This little library is geared towards teaching and favors simplicity and conciseness over fancy features and top-notch performance.
+This little library is geared towards teaching and favors simplicity and conciseness
+over fancy features and top-notch performance.
 TinyFF implements the nitty-gritty of linear-scaling pairwise potentials,
 so students can build their own molecular dynamics implementation,
-skipping the technicalities of implementing the correct potential energy, pressure and forces acting on atoms.
+skipping the technicalities of implementing the correct
+potential energy, pressure and forces acting on atoms.
 
 TinyFF is written by Toon Verstraelen for students of the
-[Computtional Physics course (C004504)](https://studiekiezer.ugent.be/2024/studiefiche/en/C004504) in the
+[Computational Physics course (C004504)](https://studiekiezer.ugent.be/2024/studiefiche/en/C004504) in the
 [Physics and Astronomy program](https://studiekiezer.ugent.be/2024/master-of-science-in-physics-and-astronomy-CMPHYS-en/programma) at
 [Ghent University](https://www.ugent.be/).
 TinyFF is distributed under the conditions of the GPL-v3 license.
@@ -75,18 +77,20 @@ cell_length = 20.0
 potential_energy, forces, mech_pressure = pwff(atpos, cell_length)
 ```
 
-This basic recipe can be extended by passing additional options into the `PairwiseForceField` constructor:
+This basic recipe can be extended by passing additional options
+into the `PairwiseForceField` constructor:
 
-- Linear-scaling neighbor lists with the linked-cell method, a.k.a. [cell lists](https://en.wikipedia.org/wiki/Cell_lists):
+- Linear-scaling neighbor lists with the linked-cell method,
+  a.k.a. [cell lists](https://en.wikipedia.org/wiki/Cell_lists):
 
     ```python
     from tinyff.neighborlist import build_nlist_linked_cell
 
-    ...
+    # Construct your force field object as follows:
     pwff = PairwiseForceField(lj, rcut, build_nlist=build_nlist_linked_cell))
     ```
 
-- [Verlet lists](https://en.wikipedia.org/wiki/Verlet_list):
+- [Verlet lists](https://en.wikipedia.org/wiki/Verlet_list) (cut-off radius + buffer):
 
     ```python
     pwff = PairwiseForceField(lj, rcut, rmax=rcut + 3, nlist_reuse=10))
@@ -95,7 +99,8 @@ This basic recipe can be extended by passing additional options into the `Pairwi
 
 ### Forging initial positions
 
-The `atomsmithy` module can generate a cubic box with standard lattices or randomized atomic positions:
+The `atomsmithy` module can generate a cubic box
+with standard lattices or randomized atomic positions:
 
 ```python
 from tinyff.atomsmithy import (
@@ -137,15 +142,21 @@ pdb_writer = PDBWriter("trajectory.pdb", to_angstrom=10.0, atnums=[18] * 50)
 pdb_writer.dump(atpos, cell_length)
 
 # If you are using Jupyter, you can visualize the trajectory with nglview as follows:
+import mdtraj
 import nglview
-nglview.show_file("trajectory.pdb")
+view = nglview.show_mdtraj(traj)
+view.clear()
+view.add_hyperball()
+view.add_unitcell()
+view
 ```
 
 For numerical post-processing, TinyFF provides a more flexible trajectory writer,
 which writes NPY files.
-It is implemented with the [`npy-append-array`](https://pypi.org/project/npy-append-array/) library, which makes it possible to extend an NPY file without having to rewrite from scratch.
+It is implemented with the [`npy-append-array`](https://pypi.org/project/npy-append-array/) library,
+which makes it possible to extend an NPY file without having to rewrite from scratch.
 (That would not be possible with NumPy alone.)
-Teh `NPYWriter` can be used as follows:
+The `NPYWriter` can be used as follows:
 
 ```python
 from tinyff.trajectory import NPYWriter
