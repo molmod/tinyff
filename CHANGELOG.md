@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2024-10-07
+
 ## Changed
 
 - Add mandatory `rcut` option to `build_random_cell`.
@@ -31,5 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Initial release. See README.md for a description of all features.
 
 
-[0.0.0]: https://github.com/molmod/tinyff/tag/v0.0.0
+[Unreleased]: https://github.com//molmod/tinyff
+[0.2.0]: https://github.com/molmod/tinyff/tag/v0.2.0
 [0.1.0]: https://github.com/molmod/tinyff/tag/v0.1.0
+[0.0.0]: https://github.com/molmod/tinyff/tag/v0.0.0
