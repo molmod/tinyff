@@ -95,7 +95,12 @@ class PushPotential(PairPotential):
 
 
 def build_random_cell(
-    cell_length: float, natom: int, *, maxiter: int = 100, rng: np.random.Generator | None = None
+    cell_length: float,
+    natom: int,
+    *,
+    rcut: float | None = None,
+    maxiter: int = 100,
+    rng: np.random.Generator | None = None,
 ):
     """Fill a cell with randomly placed atoms, avoiding close contacts."""
     # Start with completely random
@@ -104,7 +109,8 @@ def build_random_cell(
     atpos0 = rng.uniform(0, cell_length, (natom, 3))
 
     # Define cost function to push the atoms appart.
-    rcut = 0.49 * cell_length
+    if rcut is None:
+        rcut = 0.49 * cell_length
     pwff = PairwiseForceField(PushPotential(rcut), rcut)
 
     def costgrad(atpos_raveled):
