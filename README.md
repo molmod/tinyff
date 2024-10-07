@@ -90,6 +90,10 @@ into the `PairwiseForceField` constructor:
     pwff = PairwiseForceField(lj, rcut, build_nlist=build_nlist_linked_cell))
     ```
 
+    Note that the current linked-cell implementation is not very efficient (yet),
+    so we currently do not recommended using it.
+    (For about 1500 atoms, it becomes more efficient than the naive implementation.)
+
 - [Verlet lists](https://en.wikipedia.org/wiki/Verlet_list) (cut-off radius + buffer):
 
     ```python
