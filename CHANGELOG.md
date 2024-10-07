@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Changed
 
-- Add `rcut` option to `build_random_cell`.
+- Add mandatory `rcut` option to `build_random_cell`.
 
 
 ## [0.1.0] - 2024-10-06
