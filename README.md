@@ -61,15 +61,19 @@ The evaluation of the force field energy and its derivatives requires the follow
 from tinyff.forcefield import CutoffWrapper, LennardJones, PairwiseForceField
 
 # Define a pairwise potential, with energy and force shift
-rcut = 8.0
-lj = CutOffWrapper(LennardJones(2.5, 0.5), rcut)
+rcut = 5.0
+lj = CutOffWrapper(LennardJones(2.5, 2.0), rcut)
+
 # Define a force field
 pwff = PairwiseForceFcell_lengthield(lj, rcut))
+
 # You need atomic positions and the length of a periodic cell edge.
 # The following line defines just two atomic positions.
 atpos = np.array([[0.0, 0.0, 1.0], [1.0, 2.0, 0.0]])
+
 # Note that the cell must be large enough to contain the cutoff sphere.
 cell_length = 20.0
+
 # Compute stuff:
 # - The potential energy.
 # - An array with Cartesian forces, same shape as `atpos`.
@@ -98,7 +102,8 @@ into the `PairwiseForceField` constructor:
 - [Verlet lists](https://en.wikipedia.org/wiki/Verlet_list) (cut-off radius + buffer):
 
     ```python
-    pwff = PairwiseForceField(lj, rcut, rmax=rcut + 3, nlist_reuse=10))
+    rmax = 6.0  # > rcut, so buffer of 1.0
+    pwff = PairwiseForceField(lj, rmax, nlist_reuse=16))
     ```
 
 
@@ -149,6 +154,7 @@ pdb_writer.dump(atpos, cell_length)
 # If you are using Jupyter, you can visualize the trajectory with nglview as follows:
 import mdtraj
 import nglview
+traj = mdtraj.load(f"trajectory.pdb")
 view = nglview.show_mdtraj(traj)
 view.clear()
 view.add_hyperball()
