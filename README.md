@@ -73,8 +73,9 @@ cell_length = 20.0
 # Compute stuff:
 # - The potential energy.
 # - An array with Cartesian forces, same shape as `atpos`.
-# - The (virial contribution to) the pressure, only the mechanical part.
-potential_energy, forces, mech_pressure = pwff(atpos, cell_length)
+# - The force contribution the pressure
+#   (often the written as the second term in the virial pressure).
+potential_energy, forces, frc_pressure = pwff(atpos, cell_length)
 ```
 
 This basic recipe can be extended by passing additional options

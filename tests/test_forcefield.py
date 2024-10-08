@@ -68,12 +68,12 @@ def test_pairwise_force_field_two(build_nlist):
     pwff = PairwiseForceField(lj, rcut, build_nlist=build_nlist)
 
     # Compute and check against manual result
-    energy, forces, mech_press = pwff(atpos, cell_length)
+    energy, forces, frc_press = pwff(atpos, cell_length)
     d = np.linalg.norm(atpos[0] - atpos[1])
     e, g = lj(d)
     assert energy == pytest.approx(e)
     assert forces == pytest.approx(np.array([[g, 0.0, 0.0], [-g, 0.0, 0.0]]))
-    assert mech_press == pytest.approx(-g * d / (3 * cell_length**3))
+    assert frc_press == pytest.approx(-g * d / (3 * cell_length**3))
 
 
 @pytest.mark.parametrize("build_nlist", [build_nlist_linked_cell, build_nlist_simple])
@@ -87,8 +87,8 @@ def test_pairwise_force_field_three(build_nlist):
     lj = CutOffWrapper(LennardJones(2.5, 1.3), rcut)
     pwff = PairwiseForceField(lj, rcut, build_nlist=build_nlist)
 
-    # Compute the energy, the forces and the mechanical pressure.
-    energy1, forces1, mech_press1 = pwff(atpos, cell_length)
+    # Compute the energy, the forces and the force contribution pressure.
+    energy1, forces1, frc_press1 = pwff(atpos, cell_length)
 
     # Compute the energy manually and compare.
     dists = [
@@ -110,8 +110,8 @@ def test_pairwise_force_field_three(build_nlist):
         scale = my_cell_length / cell_length
         return pwff(atpos * scale, my_cell_length)[0]
 
-    mech_press2 = -nd.Derivative(energy_volume)(cell_length**3)
-    assert mech_press1 == pytest.approx(mech_press2)
+    frc_press2 = -nd.Derivative(energy_volume)(cell_length**3)
+    assert frc_press1 == pytest.approx(frc_press2)
 
 
 @pytest.mark.parametrize("build_nlist", [build_nlist_linked_cell, build_nlist_simple])
@@ -143,8 +143,8 @@ def test_pairwise_force_field_fifteen(build_nlist):
     lj = CutOffWrapper(LennardJones(2.5, 1.3), rcut)
     pwff = PairwiseForceField(lj, rcut, build_nlist=build_nlist)
 
-    # Compute the energy, the forces and the mechanical pressure.
-    energy, forces1, mech_press1 = pwff(atpos, cell_length)
+    # Compute the energy, the forces and the force contribution to the pressure.
+    energy, forces1, frc_press1 = pwff(atpos, cell_length)
     assert energy < 0
 
     # Test forces with numdifftool
@@ -158,8 +158,8 @@ def test_pairwise_force_field_fifteen(build_nlist):
         scale = my_cell_length / cell_length
         return pwff(atpos * scale, my_cell_length)[0]
 
-    mech_press2 = -nd.Derivative(energy_volume)(cell_length**3)
-    assert mech_press1 == pytest.approx(mech_press2)
+    frc_press2 = -nd.Derivative(energy_volume)(cell_length**3)
+    assert frc_press1 == pytest.approx(frc_press2)
 
 
 @pytest.mark.parametrize("build_nlist", [build_nlist_linked_cell, build_nlist_simple])

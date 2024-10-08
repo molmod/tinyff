@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Fix bug in `PairwiseForceField` class: use `rmax` only, never `rcut`.
 - Fix version import.
+- Fix pressure-related terminology.
 
 
 ## [0.2.0] - 2024-10-07

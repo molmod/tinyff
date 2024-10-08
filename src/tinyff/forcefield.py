@@ -126,8 +126,9 @@ class PairwiseForceField:
             The potential energy.
         forces
             The forces acting on the atoms, same shape as atpos.
-        mech_pressure
-            The force-contribution to the pressure.
+        frc_pressure
+            The force-contribution to the pressure,
+            i.e. usually the second term of the virial stress in most text books.
         """
         # Sanity check
         if cell_length < 2 * self.rmax:
@@ -152,7 +153,7 @@ class PairwiseForceField:
         forces = np.zeros(atpos.shape, dtype=float)
         np.add.at(forces, nlist["iatom0"], nlist["gdelta"])
         np.add.at(forces, nlist["iatom1"], -nlist["gdelta"])
-        mech_pressure = -np.dot(nlist["gdist"], nlist["dist"]) / (3 * cell_length**3)
+        frc_pressure = -np.dot(nlist["gdist"], nlist["dist"]) / (3 * cell_length**3)
         # Keep the neigborlist for the following function call
         self.nlist = nlist
-        return energy, forces, mech_pressure
+        return energy, forces, frc_pressure
