@@ -21,7 +21,7 @@
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
-__all__ = ("parse_atpos", "parse_cell_lengths", "parse_rcut")
+__all__ = ("parse_atpos", "parse_cell_lengths", "parse_rmax")
 
 
 def parse_atpos(atpos: ArrayLike, natom: int | None = None) -> NDArray[float]:
@@ -47,10 +47,10 @@ def parse_cell_lengths(cell_lengths: ArrayLike) -> NDArray[float]:
     return cell_lengths
 
 
-def parse_rcut(rcut: float, cell_lengths: NDArray[float]) -> float:
-    rcut = float(rcut)
-    if rcut <= 0:
-        raise ValueError("The cut-off radius must be strictly positive.")
-    if 2 * rcut > cell_lengths.min():
-        raise ValueError("Too large cut-off radius for the minimum image convention.")
-    return rcut
+def parse_rmax(rmax: float, cell_lengths: NDArray[float]) -> float:
+    rmax = float(rmax)
+    if rmax <= 0:
+        raise ValueError("The maximum radius must be strictly positive.")
+    if 2 * rmax > cell_lengths.min():
+        raise ValueError("Too large maximum radius for the minimum image convention.")
+    return rmax

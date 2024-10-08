@@ -90,28 +90,11 @@ class PairwiseForceField:
     )
     """A definition of the pair potential."""
 
-    rcut: float = attrs.field(converter=float)
+    rmax: float = attrs.field(converter=float, validator=attrs.validators.gt(0))
     """The cutoff radius used to build the neighbor list."""
-
-    @rcut.validator
-    def _validate_rcut(self, attribute, value):
-        if value > self.rmax:
-            raise ValueError("rmax cannot be less than rcut.")
 
     build_nlist: Callable = attrs.field(default=build_nlist_simple, kw_only=True)
     """Function used to build the neigbor list from scratch."""
-
-    rmax: float = attrs.field(converter=float, kw_only=True)
-    """The maximum radius up to which pairs are kept in the neigborlist."""
-
-    @rmax.default
-    def _default_rmax(self):
-        return self.rcut
-
-    @rmax.validator
-    def _validate_rmax(self, attribute, value):
-        if value < self.rcut:
-            raise ValueError("rmax cannot be less than rcut.")
 
     nlist_reuse: int = attrs.field(converter=int, default=0, kw_only=True)
     """Number of times the neighbor list is reused (recomputed without rebuilding)."""
@@ -147,7 +130,7 @@ class PairwiseForceField:
             The force-contribution to the pressure.
         """
         # Sanity check
-        if cell_length < 2 * self.rcut:
+        if cell_length < 2 * self.rmax:
             raise ValueError("Cell length is too short.")
         # Build or reuse the neighborlist
         if self._nlist_use_count <= 1:
@@ -156,7 +139,7 @@ class PairwiseForceField:
             self._nlist_use_count -= 1
         cell_lengths = np.full(3, cell_length)
         if self.nlist is None:
-            nlist = self.build_nlist(atpos, cell_lengths, self.rcut)
+            nlist = self.build_nlist(atpos, cell_lengths, self.rmax)
             self._nlist_use_count = self.nlist_reuse
         else:
             nlist = self.nlist

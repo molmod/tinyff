@@ -21,7 +21,7 @@
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
-from .utils import parse_atpos, parse_cell_lengths, parse_rcut
+from .utils import parse_atpos, parse_cell_lengths, parse_rmax
 
 __all__ = ("NLIST_DTYPE", "build_nlist_simple", "build_nlist_linked_cell", "recompute_nlist")
 
@@ -44,7 +44,7 @@ NLIST_DTYPE = [
 
 
 def build_nlist_simple(
-    atpos: ArrayLike, cell_lengths: ArrayLike, rcut: float
+    atpos: ArrayLike, cell_lengths: ArrayLike, rmax: float
 ) -> NDArray[NLIST_DTYPE]:
     """Build a neighborlist with a simple N^2 scaling algorithm.
 
@@ -55,22 +55,22 @@ def build_nlist_simple(
         Array shape = (natom, 3).
     cell_lengths
         The lengths of a periodic orthorombic box.
-    rcut
-        The cut-off radius.
-        Note that the cut-off sphere must fit in a single cell.
+    rmax
+        The maximum radioius, i.e. the cut-off radius for the neighborlist.
+        Note that the corresponding sphere must fit in the simulation cell.
 
     Returns
     -------
     neighborlist
-        Structured array with neighborlist, including pairs up to distance rcut.
+        Structured array with neighborlist, including pairs up to distance rmax.
     """
     # Process parameters
     atpos = parse_atpos(atpos)
     cell_lengths = parse_cell_lengths(cell_lengths)
-    rcut = parse_rcut(rcut, cell_lengths)
+    rmax = parse_rmax(rmax, cell_lengths)
 
     # Generate arrays with all pairs below the cutoff.
-    iatoms0, iatoms1, deltas, dists = _create_parts_self(atpos, None, cell_lengths, rcut)
+    iatoms0, iatoms1, deltas, dists = _create_parts_self(atpos, None, cell_lengths, rmax)
 
     # Apply cutoff and put everything in a fresh neigborlist.
     nlist = np.zeros(len(dists), dtype=NLIST_DTYPE)
@@ -122,7 +122,7 @@ def _mic(
 
 
 def build_nlist_linked_cell(
-    atpos: ArrayLike, cell_lengths: ArrayLike, rcut: float
+    atpos: ArrayLike, cell_lengths: ArrayLike, rmax: float
 ) -> NDArray[NLIST_DTYPE]:
     """Build a neighborlist with linked cell algorithm.
 
@@ -133,21 +133,21 @@ def build_nlist_linked_cell(
         Array shape = (natom, 3).
     cell_lengths
         The lengths of a periodic orthorombic box.
-    rcut
-        The cut-off radius.
-        Note that the cut-off sphere must fit in a 2x2x2 supercell.
+    rmax
+        The maximum radioius, i.e. the cut-off radius for the neighborlist.
+        Note that the corresponding sphere must fit in the simulation cell.
 
     Returns
     -------
     neighborlist
-        Structured array with neighborlist, including pairs up to distance rcut.
+        Structured array with neighborlist, including pairs up to distance rmax.
     """
     atpos = parse_atpos(atpos)
     cell_lengths = parse_cell_lengths(cell_lengths)
-    rcut = parse_rcut(rcut, cell_lengths)
+    rmax = parse_rmax(rmax, cell_lengths)
 
     # Group the atoms into bins
-    bins, nbins = _assign_atoms_to_bins(atpos, cell_lengths, rcut)
+    bins, nbins = _assign_atoms_to_bins(atpos, cell_lengths, rmax)
 
     # Loop over pairs of nearby bins and collect parts for neighborlist.
     iatoms0_parts = []
@@ -155,11 +155,11 @@ def build_nlist_linked_cell(
     deltas_parts = []
     dists_parts = []
     for idx0, bin0 in bins.items():
-        parts = [_create_parts_self(atpos, bin0, cell_lengths, rcut)]
+        parts = [_create_parts_self(atpos, bin0, cell_lengths, rmax)]
         for idx1 in _iter_nearby(idx0, nbins):
             bin1 = bins.get(idx1)
             if bin1 is not None:
-                parts.append(_create_parts_nearby(atpos, bin0, bin1, cell_lengths, rcut))
+                parts.append(_create_parts_nearby(atpos, bin0, bin1, cell_lengths, rmax))
         for iatoms0, iatoms1, deltas, dists in parts:
             if len(dists) > 0:
                 iatoms0_parts.append(iatoms0)
@@ -180,7 +180,7 @@ def build_nlist_linked_cell(
 
 
 def _assign_atoms_to_bins(
-    atpos: NDArray[float], cell_lengths: NDArray[float], rcut: float
+    atpos: NDArray[float], cell_lengths: NDArray[float], rmax: float
 ) -> tuple[dict[tuple[int, int, int], NDArray[int]], NDArray[int]]:
     """Create arrays of atom indexes for each bin in the cell.
 
@@ -191,9 +191,9 @@ def _assign_atoms_to_bins(
         Array shape = (natom, 3).
     cell_lengths
         The lengths of a periodic orthorombic box.
-    rcut
-        The cut-off radius.
-        Note that the cut-off sphere must fit in a 2x2x2 supercell.
+    rmax
+        The maximum radioius, i.e. the cut-off radius for the neighborlist.
+        Note that the corresponding sphere must fit in the simulation cell.
 
     Returns
     -------
@@ -203,7 +203,7 @@ def _assign_atoms_to_bins(
     nbins
         An array with three values: the number of bins along each Cartesian axis.
     """
-    nbins = np.floor(cell_lengths / rcut).astype(int)
+    nbins = np.floor(cell_lengths / rmax).astype(int)
     if (nbins < 2).any():
         raise ValueError("The cutoff radius is too large for the given cell lengths.")
     idxs = np.floor(atpos / (cell_lengths / nbins)).astype(int) % nbins
@@ -217,7 +217,7 @@ def _assign_atoms_to_bins(
 
 
 def _create_parts_self(
-    atpos: NDArray[float], bin0: NDArray[int] | None, cell_lengths: NDArray[float], rcut: float
+    atpos: NDArray[float], bin0: NDArray[int] | None, cell_lengths: NDArray[float], rmax: float
 ):
     """Prepare parts of a neighborlist for pairs within one cell or bin.
 
@@ -230,9 +230,9 @@ def _create_parts_self(
         A list of atom indexes to consider (or None if all are relevant.)
     cell_lengths
         The lengths of a periodic orthorombic box.
-    rcut
-        The cut-off radius.
-        Note that the cut-off sphere must fit in a 2x2x2 supercell.
+    rmax
+        The maximum radioius, i.e. the cut-off radius for the neighborlist.
+        Note that the corresponding sphere must fit in the simulation cell.
 
     Returns
     -------
@@ -250,7 +250,7 @@ def _create_parts_self(
         iatoms0 = bin0[i0]
         iatoms1 = bin0[i1]
     deltas, dists = _mic(atpos, iatoms0, iatoms1, cell_lengths)
-    mask = dists <= rcut
+    mask = dists <= rmax
     return iatoms0[mask], iatoms1[mask], deltas[mask], dists[mask]
 
 
@@ -305,7 +305,7 @@ def _create_parts_nearby(
     bin0: NDArray[int],
     bin1: NDArray[int],
     cell_lengths: NDArray[float],
-    rcut: float,
+    rmax: float,
 ):
     """Prepare parts of a neighborlist for pairs in nearby cells.
 
@@ -319,8 +319,9 @@ def _create_parts_nearby(
         Atom indexes in the other nearby bin.
     cell_lengths
         The lengths of the periodic cell edges.
-    rcut
-        The cut-off radius.
+    rmax
+        The maximum radioius, i.e. the cut-off radius for the neighborlist.
+        Note that the corresponding sphere must fit in the simulation cell.
 
     Returns
     -------
@@ -334,7 +335,7 @@ def _create_parts_nearby(
     iatoms0 = np.repeat(bin0, len(bin1))
     iatoms1 = np.tile(bin1, len(bin0))
     deltas, dists = _mic(atpos, iatoms0, iatoms1, cell_lengths)
-    mask = dists <= rcut
+    mask = dists <= rmax
     return iatoms0[mask], iatoms1[mask], deltas[mask], dists[mask]
 
 

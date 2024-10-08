@@ -171,7 +171,7 @@ def test_nlist_reuse(build_nlist):
     # Define the force field.
     rcut = 8.0
     lj = CutOffWrapper(LennardJones(2.5, 1.3), rcut)
-    pwff = PairwiseForceField(lj, rcut, build_nlist=build_nlist, rmax=9.0, nlist_reuse=3)
+    pwff = PairwiseForceField(lj, rmax=9.0, build_nlist=build_nlist, nlist_reuse=3)
     pwff(atpos, cell_length)
     assert len(pwff.nlist) == 1
     assert pwff.nlist_use_count == 3
