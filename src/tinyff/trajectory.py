@@ -97,7 +97,7 @@ class PDBWriter:
         atpos = parse_atpos(atpos, len(self.atnums))
         cell_lengths = parse_cell_lengths(cell_lengths)
         # Wrap atoms in cell for nicer visual
-        atpos -= np.floor(atpos / cell_lengths) * cell_lengths
+        atpos = atpos - np.floor(atpos / cell_lengths) * cell_lengths
         # Actual writing
         a, b, c = cell_lengths * self.to_angstrom
         print(f"CRYST1{a:9.3f}{b:9.3f}{c:9.3f}  90.00  90.00  90.00 P 1           1", file=fh)

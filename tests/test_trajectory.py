@@ -79,6 +79,16 @@ def test_pdb_writer_stride(tmpdir):
         assert fh.read().count("CRYST1") == 3
 
 
+def test_pdb_writer_no_modify(tmpdir):
+    cell_length = 3.0
+    atpos0 = np.array([[0.0, 2.0, 0.5], [1.0, 3.3, 2.44], [-1.0, 2.8, 1.7]])
+    atpos1 = atpos0.copy()
+    path_pdb = os.path.join(tmpdir, "test.pdb")
+    pdb_writer = PDBWriter(path_pdb, to_angstrom=10.0, atnums=[18] * len(atpos0))
+    pdb_writer.dump(atpos0, cell_length)
+    assert atpos0 == pytest.approx(atpos1)
+
+
 PDB_REF_SINGLE = """\
 CRYST1   10.000   10.000   10.000  90.00  90.00  90.00 P 1           1
 HETATM    1 Ar   ATM     1       3.000   4.000   5.000  1.00  1.00          Ar

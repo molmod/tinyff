@@ -7,9 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Fix leaking of wrapped coordinates when writing PDB file.
+
+
 ## [0.2.1] - 2024-10-08
 
-## Fixed
+### Fixed
 
 - Fix bug in `PairwiseForceField` class: use `rmax` only, never `rcut`.
 - Fix version import.
@@ -18,7 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.2.0] - 2024-10-07
 
-## Changed
+### Changed
 
 - Add mandatory `rcut` option to `build_random_cell`.
 
