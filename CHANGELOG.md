@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2] - 2024-10-09
+
 ### Fixed
 
 - Fix leaking of wrapped coordinates when writing PDB file.
@@ -48,6 +50,7 @@ Initial release. See README.md for a description of all features.
 
 
 [Unreleased]: https://github.com//molmod/tinyff
+[0.2.2]: https://github.com/molmod/tinyff/tag/v0.2.2
 [0.2.1]: https://github.com/molmod/tinyff/tag/v0.2.1
 [0.2.0]: https://github.com/molmod/tinyff/tag/v0.2.0
 [0.1.0]: https://github.com/molmod/tinyff/tag/v0.1.0
