@@ -22,14 +22,25 @@ import attrs
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
-from .neighborlist import NBuild
+from .neighborlist import NLIST_DTYPE, NBuild
 
-__all__ = ("PairwiseForceField",)
+__all__ = ("ForceTerm", "PairPotential", "LennardJones", "CutOffWrapper", "ForceField")
+
+
+@attrs.define
+class ForceTerm:
+    def __call__(self, nlist: NDArray[NLIST_DTYPE]):
+        raise NotImplementedError  # pragma: nocover
 
 
 @attrs.define
 class PairPotential:
-    def __call__(self, dist: ArrayLike) -> tuple[NDArray, NDArray]:
+    def __call__(self, nlist: NDArray[NLIST_DTYPE]):
+        energy, gdist = self.compute(nlist["dist"])
+        nlist["energy"] += energy
+        nlist["gdist"] += gdist
+
+    def compute(self, dist: ArrayLike) -> tuple[NDArray, NDArray]:
         """Compute pair potential energy and its derivative towards distance."""
         raise NotImplementedError  # pragma: nocover
 
@@ -39,7 +50,7 @@ class LennardJones(PairPotential):
     epsilon: float = attrs.field(converter=float)
     sigma: float = attrs.field(converter=float)
 
-    def __call__(self, dist: ArrayLike) -> tuple[NDArray, NDArray]:
+    def compute(self, dist: ArrayLike) -> tuple[NDArray, NDArray]:
         """Compute pair potential energy and its derivative towards distance."""
         dist = np.asarray(dist, dtype=float)
         x = self.sigma / dist
@@ -57,23 +68,23 @@ class CutOffWrapper(PairPotential):
 
     def __attrs_post_init__(self):
         """Post initialization changes."""
-        self.ecut, self.gcut = self.original(self.rcut)
+        self.ecut, self.gcut = self.original.compute(self.rcut)
 
-    def __call__(self, dist: ArrayLike) -> tuple[NDArray, NDArray]:
+    def compute(self, dist: ArrayLike) -> tuple[NDArray, NDArray]:
         """Compute pair potential energy and its derivative towards distance."""
         dist = np.asarray(dist, dtype=float)
         mask = dist < self.rcut
         if mask.ndim == 0:
             # Deal with non-array case
             if mask:
-                energy, gdist = self.original(dist)
+                energy, gdist = self.original.compute(dist)
                 energy -= self.ecut + self.gcut * (dist - self.rcut)
                 gdist -= self.gcut
             else:
                 energy = 0.0
                 gdist = 0.0
         else:
-            energy, gdist = self.original(dist)
+            energy, gdist = self.original.compute(dist)
             energy[mask] -= self.ecut + self.gcut * (dist[mask] - self.rcut)
             energy[~mask] = 0.0
             gdist[mask] -= self.gcut
@@ -82,11 +93,9 @@ class CutOffWrapper(PairPotential):
 
 
 @attrs.define
-class PairwiseForceField:
-    pair_potential: PairPotential = attrs.field(
-        validator=attrs.validators.instance_of(PairPotential)
-    )
-    """A definition of the pair potential."""
+class ForceField:
+    force_terms: list[ForceTerm] = attrs.field()
+    """A list of contributions to the potential energy."""
 
     nbuild: NBuild = attrs.field(validator=attrs.validators.instance_of(NBuild))
     """Algorithm to build the neigborlist."""
@@ -116,10 +125,11 @@ class PairwiseForceField:
         self.nbuild.update(atpos, cell_length)
         nlist = self.nbuild.nlist
         # Compute all pairwise quantities
-        nlist["energy"], nlist["gdist"] = self.pair_potential(nlist["dist"])
-        nlist["gdelta"] = (nlist["gdist"] / nlist["dist"]).reshape(-1, 1) * nlist["delta"]
+        for force_term in self.force_terms:
+            force_term(nlist)
         # Compute the totals
         energy = nlist["energy"].sum()
+        nlist["gdelta"] = (nlist["gdist"] / nlist["dist"]).reshape(-1, 1) * nlist["delta"]
         forces = np.zeros(atpos.shape, dtype=float)
         np.add.at(forces, nlist["iatom0"], nlist["gdelta"])
         np.add.at(forces, nlist["iatom1"], -nlist["gdelta"])

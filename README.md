@@ -58,7 +58,7 @@ This is the part that you are expected to write.
 The evaluation of the force field energy and its derivatives requires the following:
 
 ```python
-from tinyff.forcefield import CutoffWrapper, LennardJones, PairwiseForceField
+from tinyff.forcefield import CutoffWrapper, LennardJones, ForceField
 from tinyff.neighborlist import NBuildSimple
 
 # Define a pairwise potential, with energy and force shift
@@ -66,7 +66,7 @@ rcut = 5.0
 lj = CutOffWrapper(LennardJones(2.5, 2.0), rcut)
 
 # Define a force field
-pwff = PairwiseForceField(lj, NBuildSimple(rcut))
+ff = ForceField([lj], NBuildSimple(rcut))
 
 # You need atomic positions and the length of a periodic cell edge.
 # The following line defines just two atomic positions.
@@ -80,11 +80,11 @@ cell_length = 20.0
 # - An array with Cartesian forces, same shape as `atpos`.
 # - The force contribution the pressure
 #   (often the written as the second term in the virial pressure).
-potential_energy, forces, frc_pressure = pwff(atpos, cell_length)
+potential_energy, forces, frc_pressure = ff(atpos, cell_length)
 ```
 
 This basic recipe can be extended by passing additional options
-into the `PairwiseForceField` constructor:
+into the `ForceField` constructor:
 
 - Linear-scaling neighbor lists with the
   [cell lists](https://en.wikipedia.org/wiki/Cell_lists) method:
@@ -93,7 +93,7 @@ into the `PairwiseForceField` constructor:
     from tinyff.neighborlist import NBuildCellLists
 
     # Construct your force field object as follows:
-    pwff = PairwiseForceField(lj, NBuildCellLists(rcut))
+    ff = ForceField([lj], NBuildCellLists(rcut))
     ```
 
     Note that the current cell lists implementation is not very efficient (yet),
@@ -104,7 +104,7 @@ into the `PairwiseForceField` constructor:
 
     ```python
     rmax = 6.0  # > rcut, so buffer of 1.0
-    pwff = PairwiseForceField(lj, NBuildSimple(rmax, nlist_reuse=16))
+    ff = ForceField([lj], NBuildSimple(rmax, nlist_reuse=16))
     ```
 
 

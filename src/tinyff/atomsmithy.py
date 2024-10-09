@@ -23,7 +23,7 @@ import numpy as np
 from numpy.typing import ArrayLike, NDArray
 from scipy.optimize import minimize
 
-from .forcefield import PairPotential, PairwiseForceField
+from .forcefield import ForceField, PairPotential
 from .neighborlist import NBuild, NBuildSimple
 
 __all__ = (
@@ -86,7 +86,7 @@ class PushPotential(PairPotential):
 
     rcut: float = attrs.field(converter=float, validator=attrs.validators.gt(0))
 
-    def __call__(self, dist: ArrayLike) -> tuple[NDArray, NDArray]:
+    def compute(self, dist: ArrayLike) -> tuple[NDArray, NDArray]:
         """Compute pair potential energy and its derivative towards distance."""
         dist = np.asarray(dist, dtype=float)
         x = dist / self.rcut
@@ -113,11 +113,11 @@ def build_random_cell(
     # Define cost function to push the atoms appart.
     if nbuild is None:
         nbuild = NBuildSimple(rcut)
-    pwff = PairwiseForceField(PushPotential(rcut), nbuild)
+    ff = ForceField([PushPotential(rcut)], nbuild)
 
     def costgrad(atpos_raveled):
         atpos = atpos_raveled.reshape(-1, 3)
-        energy, force, _ = pwff(atpos, cell_length)
+        energy, force, _ = ff(atpos, cell_length)
         return energy, -force.ravel()
 
     # Optimize and return structure

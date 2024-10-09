@@ -22,36 +22,37 @@ import numdifftools as nd
 import numpy as np
 import pytest
 
-from tinyff.forcefield import CutOffWrapper, LennardJones, PairwiseForceField
+from tinyff.atomsmithy import PushPotential
+from tinyff.forcefield import CutOffWrapper, ForceField, LennardJones
 from tinyff.neighborlist import NBuildCellLists, NBuildSimple
 
 
 def test_lennard_jones_derivative():
     lj = LennardJones(2.5, 0.5)
     dist = np.linspace(0.4, 3.0, 50)
-    gdist1 = lj(dist)[1]
-    gdist2 = nd.Derivative(lambda dist: lj(dist)[0])(dist)
+    gdist1 = lj.compute(dist)[1]
+    gdist2 = nd.Derivative(lambda dist: lj.compute(dist)[0])(dist)
     assert gdist1 == pytest.approx(gdist2)
 
 
 def test_lennard_jones_cut_derivative():
     lj = CutOffWrapper(LennardJones(2.5, 0.5), 3.5)
     dist = np.linspace(0.4, 5.0, 50)
-    gdist1 = lj(dist)[1]
-    gdist2 = nd.Derivative(lambda x: lj(x)[0])(dist)
+    gdist1 = lj.compute(dist)[1]
+    gdist2 = nd.Derivative(lambda x: lj.compute(x)[0])(dist)
     assert gdist1 == pytest.approx(gdist2)
 
 
 def test_lennard_jones_cut_zero_array():
     lj = CutOffWrapper(LennardJones(2.5, 0.5), 3.5)
-    e, g = lj([5.0, 3.6])
+    e, g = lj.compute([5.0, 3.6])
     assert (e == 0.0).all()
     assert (g == 0.0).all()
 
 
 def test_lennard_jones_cut_zero_scalar():
     lj = CutOffWrapper(LennardJones(2.5, 0.5), 3.5)
-    e, g = lj(5.0)
+    e, g = lj.compute(5.0)
     assert e == 0.0
     assert g == 0.0
 
@@ -65,13 +66,12 @@ def test_pairwise_force_field_two(nbuild_class):
     # Define the force field.
     rcut = 8.0
     lj = CutOffWrapper(LennardJones(2.5, 1.3), rcut)
-    nbuild = nbuild_class(rcut)
-    pwff = PairwiseForceField(lj, nbuild)
+    ff = ForceField([lj], nbuild_class(rcut))
 
     # Compute and check against manual result
-    energy, forces, frc_press = pwff(atpos, cell_length)
+    energy, forces, frc_press = ff(atpos, cell_length)
     d = np.linalg.norm(atpos[0] - atpos[1])
-    e, g = lj(d)
+    e, g = lj.compute(d)
     assert energy == pytest.approx(e)
     assert forces == pytest.approx(np.array([[g, 0.0, 0.0], [-g, 0.0, 0.0]]))
     assert frc_press == pytest.approx(-g * d / (3 * cell_length**3))
@@ -86,11 +86,10 @@ def test_pairwise_force_field_three(nbuild_class):
     # Define the force field.
     rcut = 8.0
     lj = CutOffWrapper(LennardJones(2.5, 1.3), rcut)
-    nbuild = nbuild_class(rcut)
-    pwff = PairwiseForceField(lj, nbuild)
+    ff = ForceField([lj], nbuild_class(rcut))
 
     # Compute the energy, the forces and the force contribution pressure.
-    energy1, forces1, frc_press1 = pwff(atpos, cell_length)
+    energy1, forces1, frc_press1 = ff(atpos, cell_length)
 
     # Compute the energy manually and compare.
     dists = [
@@ -98,11 +97,11 @@ def test_pairwise_force_field_three(nbuild_class):
         np.linalg.norm(atpos[2] - atpos[0]),
         np.linalg.norm(atpos[0] - atpos[1]),
     ]
-    energy2 = lj(dists)[0].sum()
+    energy2 = lj.compute(dists)[0].sum()
     assert energy1 == pytest.approx(energy2)
 
     # Test forces with numdifftool
-    forces2 = -nd.Gradient(lambda x: pwff(x.reshape(-1, 3), cell_length)[0])(atpos)
+    forces2 = -nd.Gradient(lambda x: ff(x.reshape(-1, 3), cell_length)[0])(atpos)
     forces2.shape = (-1, 3)
     assert forces1 == pytest.approx(forces2.reshape(-1, 3))
 
@@ -110,7 +109,7 @@ def test_pairwise_force_field_three(nbuild_class):
     def energy_volume(volume):
         my_cell_length = volume ** (1.0 / 3.0)
         scale = my_cell_length / cell_length
-        return pwff(atpos * scale, my_cell_length)[0]
+        return ff(atpos * scale, my_cell_length)[0]
 
     frc_press2 = -nd.Derivative(energy_volume)(cell_length**3)
     assert frc_press1 == pytest.approx(frc_press2)
@@ -143,15 +142,14 @@ def test_pairwise_force_field_fifteen(nbuild_class):
     # Define the force field.
     rcut = 8.0
     lj = CutOffWrapper(LennardJones(2.5, 1.3), rcut)
-    nbuild = nbuild_class(rcut)
-    pwff = PairwiseForceField(lj, nbuild)
+    ff = ForceField([lj], nbuild_class(rcut))
 
     # Compute the energy, the forces and the force contribution to the pressure.
-    energy, forces1, frc_press1 = pwff(atpos, cell_length)
+    energy, forces1, frc_press1 = ff(atpos, cell_length)
     assert energy < 0
 
     # Test forces with numdifftool
-    forces2 = -nd.Gradient(lambda x: pwff(x.reshape(-1, 3), cell_length)[0])(atpos)
+    forces2 = -nd.Gradient(lambda x: ff(x.reshape(-1, 3), cell_length)[0])(atpos)
     forces2.shape = (-1, 3)
     assert forces1 == pytest.approx(forces2.reshape(-1, 3))
 
@@ -159,7 +157,28 @@ def test_pairwise_force_field_fifteen(nbuild_class):
     def energy_volume(volume):
         my_cell_length = volume ** (1.0 / 3.0)
         scale = my_cell_length / cell_length
-        return pwff(atpos * scale, my_cell_length)[0]
+        return ff(atpos * scale, my_cell_length)[0]
 
     frc_press2 = -nd.Derivative(energy_volume)(cell_length**3)
     assert frc_press1 == pytest.approx(frc_press2)
+
+
+@pytest.mark.parametrize("nbuild_class", [NBuildSimple, NBuildCellLists])
+def test_superposition(nbuild_class):
+    atpos = np.array([[0.0, 0.0, 5.0], [0.0, 0.0, 0.0], [0.0, 3.0, 0.0]])
+    cell_length = 10.0
+
+    # Define the force field.
+    rcut = 4.9
+    lj = CutOffWrapper(LennardJones(2.5, 1.3), rcut)
+    pp = PushPotential(rcut)
+    ff_lj = ForceField([lj], nbuild_class(rcut))
+    ff_pp = ForceField([pp], nbuild_class(rcut))
+    ff_su = ForceField([lj, pp], nbuild_class(rcut))
+
+    energy_lj, forces_lj, frc_press_lj = ff_lj(atpos, cell_length)
+    energy_pp, forces_pp, frc_press_pp = ff_pp(atpos, cell_length)
+    energy_su, forces_su, frc_press_su = ff_su(atpos, cell_length)
+    assert energy_lj + energy_pp == pytest.approx(energy_su)
+    assert forces_lj + forces_pp == pytest.approx(forces_su)
+    assert frc_press_lj + frc_press_pp == pytest.approx(frc_press_su)
