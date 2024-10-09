@@ -24,6 +24,7 @@ from numpy.typing import ArrayLike, NDArray
 from scipy.optimize import minimize
 
 from .forcefield import PairPotential, PairwiseForceField
+from .neighborlist import NBuild, NBuildSimple
 
 __all__ = (
     "build_general_cubic_lattice",
@@ -100,6 +101,7 @@ def build_random_cell(
     rcut: float,
     *,
     maxiter: int = 100,
+    nbuild: NBuild | None = None,
     rng: np.random.Generator | None = None,
 ):
     """Fill a cell with randomly placed atoms, avoiding close contacts."""
@@ -109,7 +111,9 @@ def build_random_cell(
     atpos0 = rng.uniform(0, cell_length, (natom, 3))
 
     # Define cost function to push the atoms appart.
-    pwff = PairwiseForceField(PushPotential(rcut), rcut)
+    if nbuild is None:
+        nbuild = NBuildSimple(rcut)
+    pwff = PairwiseForceField(PushPotential(rcut), nbuild)
 
     def costgrad(atpos_raveled):
         atpos = atpos_raveled.reshape(-1, 3)

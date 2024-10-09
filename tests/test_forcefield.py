@@ -23,7 +23,7 @@ import numpy as np
 import pytest
 
 from tinyff.forcefield import CutOffWrapper, LennardJones, PairwiseForceField
-from tinyff.neighborlist import build_nlist_linked_cell, build_nlist_simple
+from tinyff.neighborlist import NBuildCellLists, NBuildSimple
 
 
 def test_lennard_jones_derivative():
@@ -56,8 +56,8 @@ def test_lennard_jones_cut_zero_scalar():
     assert g == 0.0
 
 
-@pytest.mark.parametrize("build_nlist", [build_nlist_linked_cell, build_nlist_simple])
-def test_pairwise_force_field_two(build_nlist):
+@pytest.mark.parametrize("nbuild_class", [NBuildSimple, NBuildCellLists])
+def test_pairwise_force_field_two(nbuild_class):
     # Build a simple model for testing.
     cell_length = 20.0
     atpos = np.array([[0.0, 0.0, 0.0], [2.0, 0.0, 0.0]])
@@ -65,7 +65,8 @@ def test_pairwise_force_field_two(build_nlist):
     # Define the force field.
     rcut = 8.0
     lj = CutOffWrapper(LennardJones(2.5, 1.3), rcut)
-    pwff = PairwiseForceField(lj, rcut, build_nlist=build_nlist)
+    nbuild = nbuild_class(rcut)
+    pwff = PairwiseForceField(lj, nbuild)
 
     # Compute and check against manual result
     energy, forces, frc_press = pwff(atpos, cell_length)
@@ -76,8 +77,8 @@ def test_pairwise_force_field_two(build_nlist):
     assert frc_press == pytest.approx(-g * d / (3 * cell_length**3))
 
 
-@pytest.mark.parametrize("build_nlist", [build_nlist_linked_cell, build_nlist_simple])
-def test_pairwise_force_field_three(build_nlist):
+@pytest.mark.parametrize("nbuild_class", [NBuildSimple, NBuildCellLists])
+def test_pairwise_force_field_three(nbuild_class):
     # Build a simple model for testing.
     cell_length = 20.0
     atpos = np.array([[0.0, 0.0, 0.0], [0.0, 5.0, 2.5], [0.0, 5.0, -2.5]])
@@ -85,7 +86,8 @@ def test_pairwise_force_field_three(build_nlist):
     # Define the force field.
     rcut = 8.0
     lj = CutOffWrapper(LennardJones(2.5, 1.3), rcut)
-    pwff = PairwiseForceField(lj, rcut, build_nlist=build_nlist)
+    nbuild = nbuild_class(rcut)
+    pwff = PairwiseForceField(lj, nbuild)
 
     # Compute the energy, the forces and the force contribution pressure.
     energy1, forces1, frc_press1 = pwff(atpos, cell_length)
@@ -114,8 +116,8 @@ def test_pairwise_force_field_three(build_nlist):
     assert frc_press1 == pytest.approx(frc_press2)
 
 
-@pytest.mark.parametrize("build_nlist", [build_nlist_linked_cell, build_nlist_simple])
-def test_pairwise_force_field_fifteen(build_nlist):
+@pytest.mark.parametrize("nbuild_class", [NBuildSimple, NBuildCellLists])
+def test_pairwise_force_field_fifteen(nbuild_class):
     # Build a simple model for testing.
     cell_length = 20.0
     atpos = np.array(
@@ -141,7 +143,8 @@ def test_pairwise_force_field_fifteen(build_nlist):
     # Define the force field.
     rcut = 8.0
     lj = CutOffWrapper(LennardJones(2.5, 1.3), rcut)
-    pwff = PairwiseForceField(lj, rcut, build_nlist=build_nlist)
+    nbuild = nbuild_class(rcut)
+    pwff = PairwiseForceField(lj, nbuild)
 
     # Compute the energy, the forces and the force contribution to the pressure.
     energy, forces1, frc_press1 = pwff(atpos, cell_length)
@@ -160,32 +163,3 @@ def test_pairwise_force_field_fifteen(build_nlist):
 
     frc_press2 = -nd.Derivative(energy_volume)(cell_length**3)
     assert frc_press1 == pytest.approx(frc_press2)
-
-
-@pytest.mark.parametrize("build_nlist", [build_nlist_linked_cell, build_nlist_simple])
-def test_nlist_reuse(build_nlist):
-    # Build a simple model for testing.
-    cell_length = 20.0
-    atpos = np.array([[0.0, 0.0, 0.0], [2.0, 0.0, 0.0]])
-
-    # Define the force field.
-    rcut = 8.0
-    lj = CutOffWrapper(LennardJones(2.5, 1.3), rcut)
-    pwff = PairwiseForceField(lj, rmax=9.0, build_nlist=build_nlist, nlist_reuse=3)
-    pwff(atpos, cell_length)
-    assert len(pwff.nlist) == 1
-    assert pwff.nlist_use_count == 3
-    assert pwff.nlist["dist"][0] == pytest.approx(2.0)
-    atpos = np.array([[0.0, 0.0, 0.0], [8.5, 0.0, 0.0]])
-    pwff(atpos, cell_length)
-    assert len(pwff.nlist) == 1
-    assert pwff.nlist_use_count == 2
-    assert pwff.nlist["dist"][0] == pytest.approx(8.5)
-    atpos = np.array([[0.0, 0.0, 0.0], [10.0, 0.0, 0.0]])
-    pwff(atpos, cell_length)
-    assert pwff.nlist_use_count == 1
-    assert len(pwff.nlist) == 1
-    assert pwff.nlist["dist"][0] == pytest.approx(10)
-    pwff(atpos, cell_length)
-    assert pwff.nlist_use_count == 3
-    assert len(pwff.nlist) == 0

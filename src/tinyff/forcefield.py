@@ -18,13 +18,11 @@
 # --
 """Basic Force Field models."""
 
-from collections.abc import Callable
-
 import attrs
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
-from .neighborlist import NLIST_DTYPE, build_nlist_simple, recompute_nlist
+from .neighborlist import NBuild
 
 __all__ = ("PairwiseForceField",)
 
@@ -90,24 +88,8 @@ class PairwiseForceField:
     )
     """A definition of the pair potential."""
 
-    rmax: float = attrs.field(converter=float, validator=attrs.validators.gt(0))
-    """The cutoff radius used to build the neighbor list."""
-
-    build_nlist: Callable = attrs.field(default=build_nlist_simple, kw_only=True)
-    """Function used to build the neigbor list from scratch."""
-
-    nlist_reuse: int = attrs.field(converter=int, default=0, kw_only=True)
-    """Number of times the neighbor list is reused (recomputed without rebuilding)."""
-
-    _nlist_use_count: int = attrs.field(converter=int, default=0, init=False)
-    """Internal counter to decide when to rebuild neigborlist."""
-
-    @property
-    def nlist_use_count(self):
-        """The number of times the current neighborlist will be reused in future calculations."""
-        return self._nlist_use_count
-
-    nlist: NDArray[NLIST_DTYPE] | None = attrs.field(init=False, default=None)
+    nbuild: NBuild = attrs.field(validator=attrs.validators.instance_of(NBuild))
+    """Algorithm to build the neigborlist."""
 
     def __call__(self, atpos: NDArray, cell_length: float):
         """Compute microscopic properties related to the potential energy.
@@ -130,21 +112,9 @@ class PairwiseForceField:
             The force-contribution to the pressure,
             i.e. usually the second term of the virial stress in most text books.
         """
-        # Sanity check
-        if cell_length < 2 * self.rmax:
-            raise ValueError("Cell length is too short.")
-        # Build or reuse the neighborlist
-        if self._nlist_use_count <= 1:
-            self.nlist = None
-        else:
-            self._nlist_use_count -= 1
-        cell_lengths = np.full(3, cell_length)
-        if self.nlist is None:
-            nlist = self.build_nlist(atpos, cell_lengths, self.rmax)
-            self._nlist_use_count = self.nlist_reuse
-        else:
-            nlist = self.nlist
-            recompute_nlist(atpos, cell_lengths, nlist)
+        # Bring neighborlist up to date.
+        self.nbuild.update(atpos, cell_length)
+        nlist = self.nbuild.nlist
         # Compute all pairwise quantities
         nlist["energy"], nlist["gdist"] = self.pair_potential(nlist["dist"])
         nlist["gdelta"] = (nlist["gdist"] / nlist["dist"]).reshape(-1, 1) * nlist["delta"]
@@ -154,6 +124,4 @@ class PairwiseForceField:
         np.add.at(forces, nlist["iatom0"], nlist["gdelta"])
         np.add.at(forces, nlist["iatom1"], -nlist["gdelta"])
         frc_pressure = -np.dot(nlist["gdist"], nlist["dist"]) / (3 * cell_length**3)
-        # Keep the neigborlist for the following function call
-        self.nlist = nlist
         return energy, forces, frc_pressure

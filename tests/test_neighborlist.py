@@ -22,14 +22,13 @@ import numpy as np
 import pytest
 
 from tinyff.neighborlist import (
+    NBuildCellLists,
+    NBuildSimple,
     _assign_atoms_to_bins,
     _create_parts_nearby,
     _create_parts_self,
     _iter_nearby,
     _mic,
-    build_nlist_linked_cell,
-    build_nlist_simple,
-    recompute_nlist,
 )
 
 
@@ -267,16 +266,17 @@ def test_create_parts_nearby_random():
     assert dists_a == pytest.approx(dists_b)
 
 
-@pytest.mark.parametrize("build_nlist", [build_nlist_simple, build_nlist_linked_cell])
+@pytest.mark.parametrize("nbuild_class", [NBuildSimple, NBuildCellLists])
 @pytest.mark.parametrize("cell_length", [1.0, 2.0, 3.0])
-def test_build_cubic_simple(build_nlist, cell_length):
+def test_build_cubic_simple(nbuild_class, cell_length):
     # Build
     atpos = np.array([[0.1, 0.1, 0.1], [-0.1, -0.1, -0.1]])
     atpos[1] += cell_length
-    cell_lenghts = [cell_length] * 3
-    nlist = build_nlist(atpos, cell_lenghts, 0.4)
-    assert len(nlist) == 1
-    i, j, delta, _, dist, _, _ = nlist[0]
+    cell_lengths = [cell_length] * 3
+    nbuild = nbuild_class(rmax=0.4, nlist_reuse=2)
+    nbuild.update(atpos, cell_lengths)
+    assert len(nbuild.nlist) == 1
+    i, j, delta, _, dist, _, _ = nbuild.nlist[0]
     if i == 0:
         assert j == 1
         assert delta == pytest.approx([-0.2, -0.2, -0.2])
@@ -288,9 +288,9 @@ def test_build_cubic_simple(build_nlist, cell_length):
 
     # Recompute
     atpos[1] = [0.5, 0.5, 0.5]
-    recompute_nlist(atpos, cell_lenghts, nlist)
-    assert len(nlist) == 1
-    i, j, delta, _, dist, _, _ = nlist[0]
+    nbuild.update(atpos, cell_lengths)
+    assert len(nbuild.nlist) == 1
+    i, j, delta, _, dist, _, _ = nbuild.nlist[0]
     if i == 0:
         assert j == 1
         assert delta == pytest.approx([0.4, 0.4, 0.4])
@@ -301,29 +301,32 @@ def test_build_cubic_simple(build_nlist, cell_length):
     assert dist == pytest.approx(np.sqrt(48) / 10)
 
 
-@pytest.mark.parametrize("build_nlist", [build_nlist_simple, build_nlist_linked_cell])
-def test_build_empty(build_nlist):
+@pytest.mark.parametrize("nbuild_class", [NBuildSimple, NBuildCellLists])
+def test_build_empty(nbuild_class):
     atpos = np.array([[0.1, 0.1, 0.1], [2.1, 2.1, 2.1]])
     cell_lenghts = 5.0
-    nlist = build_nlist(atpos, cell_lenghts, 0.4)
-    assert len(nlist) == 0
+    nbuild = nbuild_class(0.4)
+    nbuild.update(atpos, cell_lenghts)
+    assert len(nbuild.nlist) == 0
 
 
 @pytest.mark.parametrize(
     "cell_lengths", [[10.0, 15.0, 20.0], [15.0, 20.0, 10.0], [20.0, 10.0, 15.0]]
 )
 def test_build_ortho_random(cell_lengths):
-    rcut = 4.999
+    rmax = 4.999
     rng = np.random.default_rng(42)
     natom = 100
     atpos = rng.uniform(-50.0, 50.0, (natom, 3))
 
     # Compute with simple algorithm and with linked cell
-    nlist1 = build_nlist_simple(atpos, cell_lengths, rcut)
-    nlist2 = build_nlist_linked_cell(atpos, cell_lengths, rcut)
+    nbuild1 = NBuildSimple(rmax)
+    nbuild1.update(atpos, cell_lengths)
+    nbuild2 = NBuildCellLists(rmax)
+    nbuild2.update(atpos, cell_lengths)
 
     # Compare the results
-    assert len(nlist1) == len(nlist2)
+    assert len(nbuild1.nlist) == len(nbuild2.nlist)
 
     def normalize(nlist):
         """Normalize neigbor lists to enable one-on-one comparison."""
@@ -334,12 +337,41 @@ def test_build_ortho_random(cell_lengths):
         nlist["iatom1"][swap] = iatoms0[swap]
         nlist["delta"][swap] *= -1
         order = np.lexsort([nlist["iatom1"], nlist["iatom0"]])
-        return nlist[order]
+        nlist[:] = nlist[order]
 
     # Sort both neighbor lists
-    nlist1 = normalize(nlist1)
-    nlist2 = normalize(nlist2)
+    normalize(nbuild1.nlist)
+    normalize(nbuild2.nlist)
 
     # Compare each field separately for more readable test outputs
-    assert (nlist1["iatom0"] == nlist2["iatom0"]).all()
-    assert (nlist1["iatom1"] == nlist2["iatom1"]).all()
+    assert (nbuild1.nlist["iatom0"] == nbuild2.nlist["iatom0"]).all()
+    assert (nbuild1.nlist["iatom1"] == nbuild2.nlist["iatom1"]).all()
+    assert nbuild1.nlist["delta"] == pytest.approx(nbuild2.nlist["delta"])
+    assert nbuild1.nlist["dist"] == pytest.approx(nbuild2.nlist["dist"])
+
+
+@pytest.mark.parametrize("nbuild_class", [NBuildSimple, NBuildCellLists])
+def test_nlist_reuse(nbuild_class):
+    # Build a simple model for testing.
+    cell_length = 20.0
+    atpos = np.array([[0.0, 0.0, 0.0], [2.0, 0.0, 0.0]])
+
+    # Define the force field.
+    nbuild = nbuild_class(rmax=9.0, nlist_reuse=3)
+    nbuild.update(atpos, cell_length)
+    assert len(nbuild.nlist) == 1
+    assert nbuild.nlist_use_count == 3
+    assert nbuild.nlist["dist"][0] == pytest.approx(2.0)
+    atpos = np.array([[0.0, 0.0, 0.0], [8.5, 0.0, 0.0]])
+    nbuild.update(atpos, cell_length)
+    assert len(nbuild.nlist) == 1
+    assert nbuild.nlist_use_count == 2
+    assert nbuild.nlist["dist"][0] == pytest.approx(8.5)
+    atpos = np.array([[0.0, 0.0, 0.0], [10.0, 0.0, 0.0]])
+    nbuild.update(atpos, cell_length)
+    assert nbuild.nlist_use_count == 1
+    assert len(nbuild.nlist) == 1
+    assert nbuild.nlist["dist"][0] == pytest.approx(10)
+    nbuild.update(atpos, cell_length)
+    assert nbuild.nlist_use_count == 3
+    assert len(nbuild.nlist) == 0

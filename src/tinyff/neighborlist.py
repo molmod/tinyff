@@ -18,12 +18,13 @@
 # --
 """Basic Neighborlists."""
 
+import attrs
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
-from .utils import parse_atpos, parse_cell_lengths, parse_rmax
+from .utils import parse_atpos, parse_cell_lengths
 
-__all__ = ("NLIST_DTYPE", "build_nlist_simple", "build_nlist_linked_cell", "recompute_nlist")
+__all__ = ("NLIST_DTYPE", "NBuildSimple", "NBuildCellLists")
 
 NLIST_DTYPE = [
     # First atoms.
@@ -43,42 +44,73 @@ NLIST_DTYPE = [
 ]
 
 
-def build_nlist_simple(
-    atpos: ArrayLike, cell_lengths: ArrayLike, rmax: float
-) -> NDArray[NLIST_DTYPE]:
-    """Build a neighborlist with a simple N^2 scaling algorithm.
+@attrs.define
+class NBuild:
+    """Base class for neighborlist building algorithms."""
 
-    Parameters
-    ----------
-    atpos
-        Atomic positions, one atom per row.
-        Array shape = (natom, 3).
-    cell_lengths
-        The lengths of a periodic orthorombic box.
-    rmax
-        The maximum radioius, i.e. the cut-off radius for the neighborlist.
-        Note that the corresponding sphere must fit in the simulation cell.
+    rmax: float = attrs.field(
+        converter=float, on_setattr=attrs.setters.frozen, validator=attrs.validators.gt(0)
+    )
+    """Maximum distances retained in the neighborlist.
 
-    Returns
-    -------
-    neighborlist
-        Structured array with neighborlist, including pairs up to distance rmax.
+    Note that the corresponding sphere must fit in the simulation cell.
     """
-    # Process parameters
-    atpos = parse_atpos(atpos)
-    cell_lengths = parse_cell_lengths(cell_lengths)
-    rmax = parse_rmax(rmax, cell_lengths)
 
-    # Generate arrays with all pairs below the cutoff.
-    iatoms0, iatoms1, deltas, dists = _create_parts_self(atpos, None, cell_lengths, rmax)
+    nlist: NDArray[NLIST_DTYPE] | None = attrs.field(default=None, init=False)
+    """The current neighborlist."""
 
-    # Apply cutoff and put everything in a fresh neigborlist.
-    nlist = np.zeros(len(dists), dtype=NLIST_DTYPE)
-    nlist["iatom0"] = iatoms0
-    nlist["iatom1"] = iatoms1
-    nlist["delta"] = deltas
-    nlist["dist"] = dists
-    return nlist
+    nlist_reuse: int = attrs.field(converter=int, default=0, kw_only=True)
+    """Number of times the neighbor list is recomputed without rebuilding."""
+
+    _nlist_use_count: int = attrs.field(converter=int, default=0, init=False)
+    """Internal counter to decide when to rebuild neigborlist."""
+
+    @property
+    def nlist_use_count(self):
+        """The number of times the current neighborlist will be reused in future calculations."""
+        return self._nlist_use_count
+
+    def update(self, atpos: ArrayLike, cell_lengths: ArrayLike):
+        """Rebuild or recompute the neighbor list.
+
+        Parameters
+        ----------
+        atpos
+            Atomic positions, one atom per row.
+            Array shape = (natom, 3).
+        cell_lengths
+            The lengths of a periodic orthorombic box.
+        """
+        # Rebuild or recompute the neighborlist
+        if self._nlist_use_count <= 1:
+            self.nlist = None
+        else:
+            self._nlist_use_count -= 1
+        if self.nlist is None:
+            self._rebuild(atpos, cell_lengths)
+            self._nlist_use_count = self.nlist_reuse
+        else:
+            self._recompute(atpos, cell_lengths)
+
+    def _rebuild(self, atpos: ArrayLike, cell_lengths: ArrayLike):
+        """Build the neighborlist array from scratch, possibly identifying new pairs."""
+        raise NotImplementedError
+
+    def _recompute(self, atpos: ArrayLike, cell_lengths: ArrayLike):
+        """Recompute deltas and distances and reset other parts of the neighborlist in-place."""
+        # Process parameters.
+        atpos = parse_atpos(atpos)
+        cell_lengths = parse_cell_lengths(cell_lengths, self.rmax)
+
+        # Do some work.
+        deltas, dists = _mic(atpos, self.nlist["iatom0"], self.nlist["iatom1"], cell_lengths)
+
+        # Update or reset fields in the neigborlist.
+        self.nlist["delta"] = deltas
+        self.nlist["dist"] = dists
+        self.nlist["gdelta"] = 0.0
+        self.nlist["gdist"] = 0.0
+        self.nlist["energy"] = 0.0
 
 
 def _mic(
@@ -121,62 +153,67 @@ def _mic(
     return atmic, atd
 
 
-def build_nlist_linked_cell(
-    atpos: ArrayLike, cell_lengths: ArrayLike, rmax: float
-) -> NDArray[NLIST_DTYPE]:
-    """Build a neighborlist with linked cell algorithm.
+@attrs.define
+class NBuildSimple(NBuild):
+    # _last_natom: int = attrs.field(default=0, init=False)
+    # _last_iatoms0: NDArray[int] | None = attrs.field(default=None, init=False)
+    # _last_iatoms1: NDArray[int] | None = attrs.field(default=None, init=False)
 
-    Parameters
-    ----------
-    atpos
-        Atomic positions, one atom per row.
-        Array shape = (natom, 3).
-    cell_lengths
-        The lengths of a periodic orthorombic box.
-    rmax
-        The maximum radioius, i.e. the cut-off radius for the neighborlist.
-        Note that the corresponding sphere must fit in the simulation cell.
+    def _rebuild(self, atpos: ArrayLike, cell_lengths: ArrayLike):
+        """Build the neighborlist array from scratch, possibly identifying new pairs."""
+        # Parse parameters
+        atpos = parse_atpos(atpos)
+        cell_lengths = parse_cell_lengths(cell_lengths, self.rmax)
 
-    Returns
-    -------
-    neighborlist
-        Structured array with neighborlist, including pairs up to distance rmax.
-    """
-    atpos = parse_atpos(atpos)
-    cell_lengths = parse_cell_lengths(cell_lengths)
-    rmax = parse_rmax(rmax, cell_lengths)
+        # Generate arrays with all pairs below the cutoff.
+        iatoms0, iatoms1, deltas, dists = _create_parts_self(atpos, None, cell_lengths, self.rmax)
 
-    # Group the atoms into bins
-    bins, nbins = _assign_atoms_to_bins(atpos, cell_lengths, rmax)
+        # Apply cutoff and put everything in a fresh neigborlist.
+        self.nlist = np.zeros(len(dists), dtype=NLIST_DTYPE)
+        self.nlist["iatom0"] = iatoms0
+        self.nlist["iatom1"] = iatoms1
+        self.nlist["delta"] = deltas
+        self.nlist["dist"] = dists
 
-    # Loop over pairs of nearby bins and collect parts for neighborlist.
-    iatoms0_parts = []
-    iatoms1_parts = []
-    deltas_parts = []
-    dists_parts = []
-    for idx0, bin0 in bins.items():
-        parts = [_create_parts_self(atpos, bin0, cell_lengths, rmax)]
-        for idx1 in _iter_nearby(idx0, nbins):
-            bin1 = bins.get(idx1)
-            if bin1 is not None:
-                parts.append(_create_parts_nearby(atpos, bin0, bin1, cell_lengths, rmax))
-        for iatoms0, iatoms1, deltas, dists in parts:
-            if len(dists) > 0:
-                iatoms0_parts.append(iatoms0)
-                iatoms1_parts.append(iatoms1)
-                deltas_parts.append(deltas)
-                dists_parts.append(dists)
 
-    # Put everything in a neighborlist array.
-    if len(dists_parts) == 0:
-        return np.zeros(0, dtype=NLIST_DTYPE)
-    dists = np.concatenate(dists_parts)
-    nlist = np.zeros(len(dists), dtype=NLIST_DTYPE)
-    nlist["iatom0"] = np.concatenate(iatoms0_parts)
-    nlist["iatom1"] = np.concatenate(iatoms1_parts)
-    nlist["delta"] = np.concatenate(deltas_parts)
-    nlist["dist"] = dists
-    return nlist
+@attrs.define
+class NBuildCellLists(NBuild):
+    def _rebuild(self, atpos: ArrayLike, cell_lengths: ArrayLike):
+        """Build a neighborlist with linked cell algorithm."""
+        atpos = parse_atpos(atpos)
+        cell_lengths = parse_cell_lengths(cell_lengths, self.rmax)
+
+        # Group the atoms into bins
+        bins, nbins = _assign_atoms_to_bins(atpos, cell_lengths, self.rmax)
+
+        # Loop over pairs of nearby bins and collect parts for neighborlist.
+        iatoms0_parts = []
+        iatoms1_parts = []
+        deltas_parts = []
+        dists_parts = []
+        for idx0, bin0 in bins.items():
+            parts = [_create_parts_self(atpos, bin0, cell_lengths, self.rmax)]
+            for idx1 in _iter_nearby(idx0, nbins):
+                bin1 = bins.get(idx1)
+                if bin1 is not None:
+                    parts.append(_create_parts_nearby(atpos, bin0, bin1, cell_lengths, self.rmax))
+            for iatoms0, iatoms1, deltas, dists in parts:
+                if len(dists) > 0:
+                    iatoms0_parts.append(iatoms0)
+                    iatoms1_parts.append(iatoms1)
+                    deltas_parts.append(deltas)
+                    dists_parts.append(dists)
+
+        # Put everything in a neighborlist array.
+        if len(dists_parts) == 0:
+            self.nlist = np.zeros(0, dtype=NLIST_DTYPE)
+        else:
+            dists = np.concatenate(dists_parts)
+            self.nlist = np.zeros(len(dists), dtype=NLIST_DTYPE)
+            self.nlist["iatom0"] = np.concatenate(iatoms0_parts)
+            self.nlist["iatom1"] = np.concatenate(iatoms1_parts)
+            self.nlist["delta"] = np.concatenate(deltas_parts)
+            self.nlist["dist"] = dists
 
 
 def _assign_atoms_to_bins(
@@ -337,31 +374,3 @@ def _create_parts_nearby(
     deltas, dists = _mic(atpos, iatoms0, iatoms1, cell_lengths)
     mask = dists <= rmax
     return iatoms0[mask], iatoms1[mask], deltas[mask], dists[mask]
-
-
-def recompute_nlist(atpos: ArrayLike, cell_lengths: ArrayLike, nlist: NDArray[NLIST_DTYPE]):
-    """Recompute deltas and distances and reset other parts of the neighborlist in-place.
-
-    Parameters
-    ----------
-    atpos
-        The array with all atomic positions. Shape is (natom, 3).
-    cell_lengths
-        The lengths of the periodic cell edges.
-    nlist
-        A previously built neighborlist, using older atomic positions.
-        This array will be updated instead of returning a new one.
-    """
-    # Process parameters.
-    atpos = parse_atpos(atpos)
-    cell_lengths = parse_cell_lengths(cell_lengths)
-
-    # Do some work.
-    deltas, dists = _mic(atpos, nlist["iatom0"], nlist["iatom1"], cell_lengths)
-
-    # Update or reset fields in the neigborlist.
-    nlist["delta"] = deltas
-    nlist["dist"] = dists
-    nlist["gdelta"] = 0.0
-    nlist["gdist"] = 0.0
-    nlist["energy"] = 0.0

@@ -21,7 +21,7 @@
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
-__all__ = ("parse_atpos", "parse_cell_lengths", "parse_rmax")
+__all__ = ("parse_atpos", "parse_cell_lengths")
 
 
 def parse_atpos(atpos: ArrayLike, natom: int | None = None) -> NDArray[float]:
@@ -36,7 +36,7 @@ def parse_atpos(atpos: ArrayLike, natom: int | None = None) -> NDArray[float]:
     return atpos
 
 
-def parse_cell_lengths(cell_lengths: ArrayLike) -> NDArray[float]:
+def parse_cell_lengths(cell_lengths: ArrayLike, rmax: float = 0.0) -> NDArray[float]:
     cell_lengths = np.asarray(cell_lengths, dtype=float)
     if cell_lengths.shape == ():
         cell_lengths = np.full(3, cell_lengths)
@@ -44,13 +44,6 @@ def parse_cell_lengths(cell_lengths: ArrayLike) -> NDArray[float]:
         raise TypeError("cell_lengths must have three elements.")
     if (cell_lengths <= 0).any():
         raise ValueError("All cell lenghths must be positive.")
-    return cell_lengths
-
-
-def parse_rmax(rmax: float, cell_lengths: NDArray[float]) -> float:
-    rmax = float(rmax)
-    if rmax <= 0:
-        raise ValueError("The maximum radius must be strictly positive.")
     if 2 * rmax > cell_lengths.min():
         raise ValueError("Too large maximum radius for the minimum image convention.")
-    return rmax
+    return cell_lengths

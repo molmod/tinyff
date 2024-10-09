@@ -29,7 +29,7 @@ from tinyff.atomsmithy import (
     build_fcc_lattice,
     build_random_cell,
 )
-from tinyff.neighborlist import build_nlist_simple
+from tinyff.neighborlist import NBuildSimple
 
 
 def test_cubic_lattice():
@@ -129,5 +129,6 @@ def test_push_cutoff():
 def test_random_box():
     rng = np.random.default_rng(42)
     atpos = build_random_cell(10.0, 32, 3.0, rng=rng)
-    nlist = build_nlist_simple(atpos, [10.0, 10.0, 10.0], rmax=4.0)
-    assert nlist["dist"].min() > 2.0
+    nbuild = NBuildSimple(rmax=4.0)
+    nbuild.update(atpos, [10.0, 10.0, 10.0])
+    assert nbuild.nlist["dist"].min() > 2.0

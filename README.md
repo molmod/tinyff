@@ -59,13 +59,14 @@ The evaluation of the force field energy and its derivatives requires the follow
 
 ```python
 from tinyff.forcefield import CutoffWrapper, LennardJones, PairwiseForceField
+from tinyff.neighborlist import NBuildSimple
 
 # Define a pairwise potential, with energy and force shift
 rcut = 5.0
 lj = CutOffWrapper(LennardJones(2.5, 2.0), rcut)
 
 # Define a force field
-pwff = PairwiseForceFcell_lengthield(lj, rcut))
+pwff = PairwiseForceField(lj, NBuildSimple(rcut))
 
 # You need atomic positions and the length of a periodic cell edge.
 # The following line defines just two atomic positions.
@@ -85,25 +86,25 @@ potential_energy, forces, frc_pressure = pwff(atpos, cell_length)
 This basic recipe can be extended by passing additional options
 into the `PairwiseForceField` constructor:
 
-- Linear-scaling neighbor lists with the linked-cell method,
-  a.k.a. [cell lists](https://en.wikipedia.org/wiki/Cell_lists):
+- Linear-scaling neighbor lists with the
+  [cell lists](https://en.wikipedia.org/wiki/Cell_lists) method:
 
     ```python
-    from tinyff.neighborlist import build_nlist_linked_cell
+    from tinyff.neighborlist import NBuildCellLists
 
     # Construct your force field object as follows:
-    pwff = PairwiseForceField(lj, rcut, build_nlist=build_nlist_linked_cell))
+    pwff = PairwiseForceField(lj, NBuildCellLists(rcut))
     ```
 
-    Note that the current linked-cell implementation is not very efficient (yet),
+    Note that the current cell lists implementation is not very efficient (yet),
     so we currently do not recommended using it.
-    (For about 1500 atoms, it becomes more efficient than the naive implementation.)
+    (For about 1500 atoms, it becomes more efficient than the simple implementation.)
 
 - [Verlet lists](https://en.wikipedia.org/wiki/Verlet_list) (cut-off radius + buffer):
 
     ```python
     rmax = 6.0  # > rcut, so buffer of 1.0
-    pwff = PairwiseForceField(lj, rmax, nlist_reuse=16))
+    pwff = PairwiseForceField(lj, NBuildSimple(rmax, nlist_reuse=16))
     ```
 
 

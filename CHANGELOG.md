@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Refactored neighborlist API, to prepare for more efficient implementations.
+
+
 ## [0.2.2] - 2024-10-09
 
 ### Fixed
