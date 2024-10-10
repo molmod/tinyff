@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2024-10-10
+
 ### Changed
 
 - Refactor `ForceField` class to facilitate future extensions.
@@ -56,6 +58,7 @@ Initial release. See README.md for a description of all features.
 
 
 [Unreleased]: https://github.com//molmod/tinyff
+[1.0.0]: https://github.com/molmod/tinyff/tag/v1.0.0
 [0.2.2]: https://github.com/molmod/tinyff/tag/v0.2.2
 [0.2.1]: https://github.com/molmod/tinyff/tag/v0.2.1
 [0.2.0]: https://github.com/molmod/tinyff/tag/v0.2.0
