@@ -58,7 +58,7 @@ This is the part that you are expected to write.
 The evaluation of the force field energy and its derivatives requires the following:
 
 ```python
-from tinyff.forcefield import CutoffWrapper, LennardJones, ForceField
+from tinyff.forcefield import CutOffWrapper, LennardJones, ForceField
 from tinyff.neighborlist import NBuildSimple
 
 # Define a pairwise potential, with energy and force shift
