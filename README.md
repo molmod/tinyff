@@ -131,7 +131,7 @@ atpos = build_fcc_lattice(2.5, 4)
 # Randomize positions. args:
 # - cell edge length
 # - number of atoms
-atpos = build_random_cell(10.0, 32)
+atpos = build_random_cell(10.0, 32, 2.5)
 ```
 
 ### Writing trajectories to disk
