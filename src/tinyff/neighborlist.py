@@ -113,7 +113,7 @@ class NBuild:
         cell_lengths = parse_cell_lengths(cell_lengths, self.rmax)
 
         # Do some work.
-        _compute_delta(atpos, self.nlist["iatom0"], self.nlist["iatom1"], out=self.nlist["delta"])
+        self.nlist["delta"] = atpos[self.nlist["iatom1"]] - atpos[self.nlist["iatom0"]]
         self.nlist["dist"] = _apply_mic(self.nlist["delta"], cell_lengths)
 
         # Reset outdated fields in the neigborlist.
@@ -167,37 +167,6 @@ class NBuild:
         nlist["delta"] += delta * signs
         nlist["dist"] = _apply_mic(nlist["delta"], cell_lengths)
         return select, nlist
-
-
-def _compute_delta(
-    atpos: NDArray[float],
-    iatoms0: NDArray[int],
-    iatoms1: NDArray[int],
-    out: NDArray[float] | None = None,
-):
-    """Compute relative vectors efficiently.
-
-    Parameters
-    ----------
-    atpos
-        The atomic positions.
-    iatoms0
-        Indexes of atoms where the relative vectors start.
-    iatoms1
-        Indexes of atoms where the relative vectors end.
-    out
-        Optional output argument to avoid array creation.
-
-    Returns
-    -------
-    deltas
-        Relative vectors.
-    """
-    if out is None:
-        out = np.zeros((len(iatoms0), 3), float)
-    atpos.take(iatoms1, axis=0, out=out)
-    out -= atpos[iatoms0]
-    return out
 
 
 def _apply_mic(deltas: NDArray[float], cell_lengths: NDArray[float]):
@@ -360,7 +329,7 @@ def _create_parts_self(
         i0, i1 = np.triu_indices(len(bin0), 1)
         iatoms0 = bin0[i0]
         iatoms1 = bin0[i1]
-    deltas = _compute_delta(atpos, iatoms0, iatoms1)
+    deltas = atpos[iatoms1] - atpos[iatoms0]
     dists = _apply_mic(deltas, cell_lengths)
     mask = dists <= rmax
     return iatoms0[mask], iatoms1[mask], deltas[mask], dists[mask]
@@ -446,7 +415,7 @@ def _create_parts_nearby(
     """
     iatoms0 = np.repeat(bin0, len(bin1))
     iatoms1 = np.tile(bin1, len(bin0))
-    deltas = _compute_delta(atpos, iatoms0, iatoms1)
+    deltas = atpos[iatoms1] - atpos[iatoms0]
     dists = _apply_mic(deltas, cell_lengths)
     mask = dists <= rmax
     return iatoms0[mask], iatoms1[mask], deltas[mask], dists[mask]

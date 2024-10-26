@@ -26,7 +26,6 @@ from tinyff.neighborlist import (
     NBuildSimple,
     _apply_mic,
     _assign_atoms_to_bins,
-    _compute_delta,
     _create_parts_nearby,
     _create_parts_self,
     _iter_nearby,
@@ -36,7 +35,7 @@ from tinyff.neighborlist import (
 def test_mic():
     atpos = np.array([[0.1, 0.1, 0.2], [1.9, 1.9, 2.0]])
     cell_lengths = np.array([2.0, 2.0, 2.0])
-    deltas = _compute_delta(atpos, [0], [1])
+    deltas = atpos[[1]] - atpos[[0]]
     dists = _apply_mic(deltas, cell_lengths)
     assert deltas == pytest.approx(np.array([[-0.2, -0.2, -0.2]]))
     assert dists == pytest.approx([np.sqrt(12) / 10])
@@ -50,7 +49,7 @@ def test_mic_random():
     iatoms0 = rng.integers(natom, size=npair)
     iatoms1 = rng.integers(natom, size=npair)
     cell_lengths = np.array([5.0, 10.0, 20.0])
-    deltas = _compute_delta(atpos, iatoms0, iatoms1)
+    deltas = atpos[iatoms1] - atpos[iatoms0]
     dists = _apply_mic(deltas, cell_lengths)
     assert deltas.shape == (npair, 3)
     assert (abs(deltas) <= cell_lengths / 2).all()
@@ -212,7 +211,7 @@ def test_create_parts_nearby_simple():
     iatoms0, iatoms1, deltas, dists = _create_parts_nearby(atpos, bin0, bin1, cell_lengths, rcut)
 
     # Two combinations are not expected to be present.
-    all_deltas = _compute_delta(atpos, [0, 0, 1, 1], [2, 3, 2, 3])
+    all_deltas = atpos[[2, 3, 2, 3]] - atpos[[0, 0, 1, 1]]
     all_dists = _apply_mic(all_deltas, cell_lengths)
     assert all_dists[0] >= rcut
     assert all_dists[3] >= rcut
