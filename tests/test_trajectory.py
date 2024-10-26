@@ -63,7 +63,7 @@ def test_pdb_writer(tmpdir):
 
     # Load PDB file to compare with reference result
     with open(path_pdb) as fh:
-        print(data)
+        data = fh.read()
     assert data == PDB_REF_DATA
 
 

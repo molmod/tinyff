@@ -86,13 +86,20 @@ class PushPotential(PairPotential):
 
     rcut: float = attrs.field(converter=float, validator=attrs.validators.gt(0))
 
-    def compute(self, dist: ArrayLike) -> tuple[NDArray, NDArray]:
+    def compute(
+        self, dist: ArrayLike, do_energy: bool = True, do_gdist: bool = False
+    ) -> list[NDArray | None]:
         """Compute pair potential energy and its derivative towards distance."""
         dist = np.asarray(dist, dtype=float)
         x = dist / self.rcut
-        energy = (x - 1) ** 2
-        gdist = 2 * (x - 1) / self.rcut
-        return energy, gdist
+        results = []
+        if do_energy:
+            energy = (x - 1) ** 2
+            results.append(energy)
+        if do_gdist:
+            gdist = 2 * (x - 1) / self.rcut
+            results.append(gdist)
+        return results
 
 
 def build_random_cell(
@@ -117,7 +124,7 @@ def build_random_cell(
 
     def costgrad(atpos_raveled):
         atpos = atpos_raveled.reshape(-1, 3)
-        energy, force, _ = ff(atpos, cell_length)
+        energy, force = ff.compute(atpos, cell_length, do_forces=True)
         return energy, -force.ravel()
 
     # Optimize and return structure

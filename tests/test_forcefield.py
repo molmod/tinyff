@@ -30,29 +30,29 @@ from tinyff.neighborlist import NBuildCellLists, NBuildSimple
 def test_lennard_jones_derivative():
     lj = LennardJones(2.5, 0.5)
     dist = np.linspace(0.4, 3.0, 50)
-    gdist1 = lj.compute(dist)[1]
-    gdist2 = nd.Derivative(lambda dist: lj.compute(dist)[0])(dist)
+    gdist1 = lj.compute(dist, do_energy=False, do_gdist=True)[0]
+    gdist2 = nd.Derivative(lambda x: lj.compute(x)[0])(dist)
     assert gdist1 == pytest.approx(gdist2)
 
 
 def test_lennard_jones_cut_derivative():
     lj = CutOffWrapper(LennardJones(2.5, 0.5), 3.5)
     dist = np.linspace(0.4, 5.0, 50)
-    gdist1 = lj.compute(dist)[1]
+    gdist1 = lj.compute(dist, do_energy=False, do_gdist=True)[0]
     gdist2 = nd.Derivative(lambda x: lj.compute(x)[0])(dist)
     assert gdist1 == pytest.approx(gdist2)
 
 
 def test_lennard_jones_cut_zero_array():
     lj = CutOffWrapper(LennardJones(2.5, 0.5), 3.5)
-    e, g = lj.compute([5.0, 3.6])
+    e, g = lj.compute([5.0, 3.6], do_gdist=True)
     assert (e == 0.0).all()
     assert (g == 0.0).all()
 
 
 def test_lennard_jones_cut_zero_scalar():
     lj = CutOffWrapper(LennardJones(2.5, 0.5), 3.5)
-    e, g = lj.compute(5.0)
+    e, g = lj.compute(5.0, do_gdist=True)
     assert e == 0.0
     assert g == 0.0
 
@@ -71,7 +71,7 @@ def test_pairwise_force_field_two(nbuild_class):
     # Compute and check against manual result
     energy, forces, frc_press = ff(atpos, cell_length)
     d = np.linalg.norm(atpos[0] - atpos[1])
-    e, g = lj.compute(d)
+    e, g = lj.compute(d, do_gdist=True)
     assert energy == pytest.approx(e)
     assert forces == pytest.approx(np.array([[g, 0.0, 0.0], [-g, 0.0, 0.0]]))
     assert frc_press == pytest.approx(-g * d / (3 * cell_length**3))
@@ -91,6 +91,15 @@ def test_pairwise_force_field_three(nbuild_class):
     # Compute the energy, the forces and the force contribution pressure.
     energy1, forces1, frc_press1 = ff(atpos, cell_length)
 
+    # Test that they match separately computed values.
+    assert energy1 == pytest.approx(ff.compute(atpos, cell_length)[0])
+    assert forces1 == pytest.approx(
+        ff.compute(atpos, cell_length, do_energy=False, do_forces=True)[0]
+    )
+    assert frc_press1 == pytest.approx(
+        ff.compute(atpos, cell_length, do_energy=False, do_press=True)[0]
+    )
+
     # Compute the energy manually and compare.
     dists = [
         np.linalg.norm(atpos[1] - atpos[2]),
@@ -101,7 +110,7 @@ def test_pairwise_force_field_three(nbuild_class):
     assert energy1 == pytest.approx(energy2)
 
     # Test forces with numdifftool
-    forces2 = -nd.Gradient(lambda x: ff(x.reshape(-1, 3), cell_length)[0])(atpos)
+    forces2 = -nd.Gradient(lambda x: ff.compute(x.reshape(-1, 3), cell_length)[0])(atpos)
     forces2.shape = (-1, 3)
     assert forces1 == pytest.approx(forces2.reshape(-1, 3))
 
@@ -109,7 +118,7 @@ def test_pairwise_force_field_three(nbuild_class):
     def energy_volume(volume):
         my_cell_length = volume ** (1.0 / 3.0)
         scale = my_cell_length / cell_length
-        return ff(atpos * scale, my_cell_length)[0]
+        return ff.compute(atpos * scale, my_cell_length)[0]
 
     frc_press2 = -nd.Derivative(energy_volume)(cell_length**3)
     assert frc_press1 == pytest.approx(frc_press2)
@@ -147,6 +156,15 @@ def test_pairwise_force_field_fifteen(nbuild_class):
     # Compute the energy, the forces and the force contribution to the pressure.
     energy, forces1, frc_press1 = ff(atpos, cell_length)
     assert energy < 0
+
+    # Test that they match separately computed values.
+    assert energy == pytest.approx(ff.compute(atpos, cell_length)[0])
+    assert forces1 == pytest.approx(
+        ff.compute(atpos, cell_length, do_energy=False, do_forces=True)[0]
+    )
+    assert frc_press1 == pytest.approx(
+        ff.compute(atpos, cell_length, do_energy=False, do_press=True)[0]
+    )
 
     # Test forces with numdifftool
     forces2 = -nd.Gradient(lambda x: ff(x.reshape(-1, 3), cell_length)[0])(atpos)

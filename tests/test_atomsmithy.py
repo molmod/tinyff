@@ -112,8 +112,8 @@ def test_fcc_lattice():
 def test_push_derivative():
     pp = PushPotential(2.5)
     dist = np.linspace(0.4, 3.0, 50)
-    gdist1 = pp.compute(dist)[1]
-    gdist2 = nd.Derivative(lambda dist: pp.compute(dist)[0])(dist)
+    gdist1 = pp.compute(dist, do_energy=False, do_gdist=True)[0]
+    gdist2 = nd.Derivative(lambda x: pp.compute(x)[0])(dist)
     assert gdist1 == pytest.approx(gdist2)
 
 
@@ -121,9 +121,9 @@ def test_push_cutoff():
     pp = PushPotential(2.5)
     eps = 1e-13
     assert abs(pp.compute(2.5 - 0.1)[0]) > eps
-    assert abs(pp.compute(2.5 - 0.1)[1]) > eps
+    assert abs(pp.compute(2.5 - 0.1, do_energy=False, do_gdist=True)[0]) > eps
     assert abs(pp.compute(2.5 - eps)[0]) < eps
-    assert abs(pp.compute(2.5 - eps)[1]) < eps
+    assert abs(pp.compute(2.5 - eps, do_energy=False, do_gdist=True)[0]) < eps
 
 
 def test_random_box():

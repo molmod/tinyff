@@ -75,12 +75,20 @@ atpos = np.array([[0.0, 0.0, 1.0], [1.0, 2.0, 0.0]])
 # Note that the cell must be large enough to contain the cutoff sphere.
 cell_length = 20.0
 
-# Compute stuff:
+# Compute energy-related quantities:
 # - The potential energy.
 # - An array with Cartesian forces, same shape as `atpos`.
 # - The force contribution the pressure
 #   (often the written as the second term in the virial pressure).
 potential_energy, forces, frc_pressure = ff(atpos, cell_length)
+
+# Compute a selection of results with ff.compute.
+#   The ff.compute method has `do_*` arguments to compute only some results:
+#   - `do_energy` (default True)
+#   - `do_forces` (default False)
+#   - `do_press` (default False).
+#   All requested results are put in a list.
+potential_energy, forces = ff.compute(atpos, cell_length, do_forces=True)
 ```
 
 This basic recipe can be extended by passing additional options

@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The `ForceField` object has a new method `compute` that can selectively compute
+  the energy, the forces and/or the force-contribution to the pressure.
+  This improves the efficiency in applications where not all quantities are of interest,
+  such as in Monte Carlo simulations.
+
+### Changed
+
+- The `PairPotential.compute` has a new API:
+  it takes `do_*` arguments to decide what is computed (energy and or derivative).
+  It returns a list of requested results.
+  By default, only the energy is computed.
+- The `ForceTerm.__call__` method has been replaced by `ForceTerm.compute_nlist`.
+  (This method is primarily for internal usage.)
+
+
 ## [1.0.0] - 2024-10-10
 
 ### Changed

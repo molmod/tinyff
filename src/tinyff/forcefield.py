@@ -29,18 +29,28 @@ __all__ = ("ForceTerm", "PairPotential", "LennardJones", "CutOffWrapper", "Force
 
 @attrs.define
 class ForceTerm:
-    def __call__(self, nlist: NDArray[NLIST_DTYPE]):
+    def compute_nlist(
+        self, nlist: NDArray[NLIST_DTYPE], do_energy: bool = True, do_gdist: bool = False
+    ):
+        """Compute energies and derivatives and add them to the neighborlist."""
         raise NotImplementedError  # pragma: nocover
 
 
 @attrs.define
 class PairPotential:
-    def __call__(self, nlist: NDArray[NLIST_DTYPE]):
-        energy, gdist = self.compute(nlist["dist"])
-        nlist["energy"] += energy
-        nlist["gdist"] += gdist
+    def compute_nlist(
+        self, nlist: NDArray[NLIST_DTYPE], do_energy: bool = True, do_gdist: bool = False
+    ):
+        """Compute energies and derivatives and add them to the neighborlist."""
+        results = self.compute(nlist["dist"], do_energy, do_gdist)
+        if do_energy:
+            nlist["energy"] += results.pop(0)
+        if do_gdist:
+            nlist["gdist"] += results.pop(0)
 
-    def compute(self, dist: ArrayLike) -> tuple[NDArray, NDArray]:
+    def compute(
+        self, dist: ArrayLike, do_energy: bool = True, do_gdist: bool = False
+    ) -> list[NDArray | None]:
         """Compute pair potential energy and its derivative towards distance."""
         raise NotImplementedError  # pragma: nocover
 
@@ -50,13 +60,20 @@ class LennardJones(PairPotential):
     epsilon: float = attrs.field(converter=float)
     sigma: float = attrs.field(converter=float)
 
-    def compute(self, dist: ArrayLike) -> tuple[NDArray, NDArray]:
+    def compute(
+        self, dist: ArrayLike, do_energy: bool = True, do_gdist: bool = False
+    ) -> list[NDArray | None]:
         """Compute pair potential energy and its derivative towards distance."""
         dist = np.asarray(dist, dtype=float)
         x = self.sigma / dist
-        energy = (4 * self.epsilon) * (x**12 - x**6)
-        gdist = (-4 * self.epsilon * self.sigma) * (12 * x**11 - 6 * x**5) / dist**2
-        return energy, gdist
+        result = []
+        if do_energy:
+            energy = (4 * self.epsilon) * (x**12 - x**6)
+            result.append(energy)
+        if do_gdist:
+            gdist = (-4 * self.epsilon * self.sigma) * (12 * x**11 - 6 * x**5) / dist**2
+            result.append(gdist)
+        return result
 
 
 @attrs.define
@@ -68,28 +85,45 @@ class CutOffWrapper(PairPotential):
 
     def __attrs_post_init__(self):
         """Post initialization changes."""
-        self.ecut, self.gcut = self.original.compute(self.rcut)
+        self.ecut, self.gcut = self.original.compute(self.rcut, do_gdist=True)
 
-    def compute(self, dist: ArrayLike) -> tuple[NDArray, NDArray]:
+    def compute(
+        self, dist: ArrayLike, do_energy: bool = True, do_gdist: bool = False
+    ) -> list[NDArray | None]:
         """Compute pair potential energy and its derivative towards distance."""
         dist = np.asarray(dist, dtype=float)
         mask = dist < self.rcut
+        results = []
         if mask.ndim == 0:
             # Deal with non-array case
             if mask:
-                energy, gdist = self.original.compute(dist)
-                energy -= self.ecut + self.gcut * (dist - self.rcut)
-                gdist -= self.gcut
+                orig_results = self.original.compute(dist, do_energy, do_gdist)
+                if do_energy:
+                    energy = orig_results.pop(0)
+                    energy -= self.ecut + self.gcut * (dist - self.rcut)
+                    results.append(energy)
+                if do_gdist:
+                    gdist = orig_results.pop(0)
+                    gdist -= self.gcut
+                    results.append(gdist)
             else:
-                energy = 0.0
-                gdist = 0.0
+                if do_energy:
+                    results.append(0.0)
+                if do_gdist:
+                    results.append(0.0)
         else:
-            energy, gdist = self.original.compute(dist)
-            energy[mask] -= self.ecut + self.gcut * (dist[mask] - self.rcut)
-            energy[~mask] = 0.0
-            gdist[mask] -= self.gcut
-            gdist[~mask] = 0.0
-        return energy, gdist
+            orig_results = self.original.compute(dist, do_energy, do_gdist)
+            if do_energy:
+                energy = orig_results.pop(0)
+                energy[mask] -= self.ecut + self.gcut * (dist[mask] - self.rcut)
+                energy[~mask] = 0.0
+                results.append(energy)
+            if do_gdist:
+                gdist = orig_results.pop(0)
+                gdist[mask] -= self.gcut
+                gdist[~mask] = 0.0
+                results.append(gdist)
+        return results
 
 
 @attrs.define
@@ -101,7 +135,7 @@ class ForceField:
     """Algorithm to build the neigborlist."""
 
     def __call__(self, atpos: NDArray, cell_length: float):
-        """Compute microscopic properties related to the potential energy.
+        """Compute the potential energy, atomic forces and the force contribution to the pressure.
 
         Parameters
         ----------
@@ -121,17 +155,59 @@ class ForceField:
             The force-contribution to the pressure,
             i.e. usually the second term of the virial stress in most text books.
         """
+        return self.compute(atpos, cell_length, do_forces=True, do_press=True)
+
+    def compute(
+        self,
+        atpos: NDArray,
+        cell_length: float,
+        do_energy: bool = True,
+        do_forces: bool = False,
+        do_press: bool = False,
+    ):
+        """Compute microscopic properties related to the potential energy.
+
+        Parameters
+        ----------
+        atpos
+            Atomic positions, one atom per row.
+            Array shape = (natom, 3).
+        cell_length
+            The length of the edge of the cubic simulation cell.
+        do_energy
+            if True, the energy is returned.
+        do_forces
+            if True, the atomic forces are returned.
+        do_press
+            if True, the force contribution to the pressure is returned.
+
+        Returns
+        -------
+        results
+            A list containing the requested values.
+        """
         # Bring neighborlist up to date.
         self.nbuild.update(atpos, cell_length)
         nlist = self.nbuild.nlist
-        # Compute all pairwise quantities
+
+        # Compute all pairwise quantities, if needed with derivatives.
         for force_term in self.force_terms:
-            force_term(nlist)
+            force_term.compute_nlist(nlist, do_energy, do_forces | do_press)
+
         # Compute the totals
-        energy = nlist["energy"].sum()
-        nlist["gdelta"] = (nlist["gdist"] / nlist["dist"]).reshape(-1, 1) * nlist["delta"]
-        forces = np.zeros(atpos.shape, dtype=float)
-        np.add.at(forces, nlist["iatom0"], nlist["gdelta"])
-        np.add.at(forces, nlist["iatom1"], -nlist["gdelta"])
-        frc_pressure = -np.dot(nlist["gdist"], nlist["dist"]) / (3 * cell_length**3)
-        return energy, forces, frc_pressure
+        results = []
+        if do_energy:
+            energy = nlist["energy"].sum()
+            results.append(energy)
+        if do_forces or do_press:
+            nlist["gdelta"] = (nlist["gdist"] / nlist["dist"]).reshape(-1, 1) * nlist["delta"]
+            if do_forces:
+                atfrc = np.zeros(atpos.shape, dtype=float)
+                np.add.at(atfrc, nlist["iatom0"], nlist["gdelta"])
+                np.add.at(atfrc, nlist["iatom1"], -nlist["gdelta"])
+                results.append(atfrc)
+            if do_press:
+                frc_press = -np.dot(nlist["gdist"], nlist["dist"]) / (3 * cell_length**3)
+                results.append(frc_press)
+
+        return results
