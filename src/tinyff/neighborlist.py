@@ -194,10 +194,6 @@ def _apply_mic(deltas: NDArray[float], cell_lengths: NDArray[float]):
 
 @attrs.define
 class NBuildSimple(NBuild):
-    # _last_natom: int = attrs.field(default=0, init=False)
-    # _last_iatoms0: NDArray[int] | None = attrs.field(default=None, init=False)
-    # _last_iatoms1: NDArray[int] | None = attrs.field(default=None, init=False)
-
     def _rebuild(self, atpos: ArrayLike, cell_lengths: ArrayLike):
         """Build the neighborlist array from scratch, possibly identifying new pairs."""
         # Parse parameters
