@@ -50,7 +50,7 @@ class PairPotential:
 
     def compute(
         self, dist: ArrayLike, do_energy: bool = True, do_gdist: bool = False
-    ) -> list[NDArray | None]:
+    ) -> list[NDArray]:
         """Compute pair potential energy and its derivative towards distance."""
         raise NotImplementedError  # pragma: nocover
 
@@ -62,7 +62,7 @@ class LennardJones(PairPotential):
 
     def compute(
         self, dist: ArrayLike, do_energy: bool = True, do_gdist: bool = False
-    ) -> list[NDArray | None]:
+    ) -> list[NDArray]:
         """Compute pair potential energy and its derivative towards distance."""
         dist = np.asarray(dist, dtype=float)
         x = self.sigma / dist
@@ -89,7 +89,7 @@ class CutOffWrapper(PairPotential):
 
     def compute(
         self, dist: ArrayLike, do_energy: bool = True, do_gdist: bool = False
-    ) -> list[NDArray | None]:
+    ) -> list[NDArray]:
         """Compute pair potential energy and its derivative towards distance."""
         dist = np.asarray(dist, dtype=float)
         mask = dist < self.rcut
