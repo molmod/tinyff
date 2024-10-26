@@ -64,16 +64,20 @@ class LennardJones(PairPotential):
         self, dist: ArrayLike, do_energy: bool = True, do_gdist: bool = False
     ) -> list[NDArray]:
         """Compute pair potential energy and its derivative towards distance."""
+        results = []
         dist = np.asarray(dist, dtype=float)
         x = self.sigma / dist
-        result = []
+        x2 = x * x
+        x3 = x2 * x
+        x5 = x2 * x3
+        x6 = x3 * x3
         if do_energy:
-            energy = (4 * self.epsilon) * (x**12 - x**6)
-            result.append(energy)
+            energy = (4 * self.epsilon) * ((x6 - 1) * x6)
+            results.append(energy)
         if do_gdist:
-            gdist = (-24 * self.epsilon * self.sigma) * (2 * x**11 - x**5) / dist**2
-            result.append(gdist)
-        return result
+            gdist = (-48 * self.epsilon * self.sigma) * ((x6 - 0.5) * x5 / dist / dist)
+            results.append(gdist)
+        return results
 
 
 @attrs.define
@@ -115,13 +119,13 @@ class CutOffWrapper(PairPotential):
             orig_results = self.original.compute(dist, do_energy, do_gdist)
             if do_energy:
                 energy = orig_results.pop(0)
-                energy[mask] -= self.ecut + self.gcut * (dist[mask] - self.rcut)
-                energy[~mask] = 0.0
+                energy -= self.ecut + self.gcut * (dist - self.rcut)
+                energy *= mask
                 results.append(energy)
             if do_gdist:
                 gdist = orig_results.pop(0)
-                gdist[mask] -= self.gcut
-                gdist[~mask] = 0.0
+                gdist -= self.gcut
+                gdist *= mask
                 results.append(gdist)
         return results
 

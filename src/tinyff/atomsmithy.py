@@ -93,11 +93,12 @@ class PushPotential(PairPotential):
         dist = np.asarray(dist, dtype=float)
         x = dist / self.rcut
         results = []
+        common = (x - 1) * (x < 1)
         if do_energy:
-            energy = (x - 1) ** 2 * (x < 1)
+            energy = common * common
             results.append(energy)
         if do_gdist:
-            gdist = 2 * (x - 1) / self.rcut * (x < 1)
+            gdist = (2 / self.rcut) * common
             results.append(gdist)
         return results
 
