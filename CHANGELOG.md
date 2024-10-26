@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the energy, the forces and/or the force-contribution to the pressure.
   This improves the efficiency in applications where not all quantities are of interest,
   such as in Monte Carlo simulations.
+- The `ForceField` object is extended with `try_move` and `accept_move`
+  to support (relatively) efficient Monte Carlo algorithms with TinyFF.
+
 
 ### Changed
 

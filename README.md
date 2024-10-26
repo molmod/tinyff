@@ -58,6 +58,7 @@ This is the part that you are expected to write.
 The evaluation of the force field energy and its derivatives requires the following:
 
 ```python
+import numpy as np
 from tinyff.forcefield import CutOffWrapper, LennardJones, ForceField
 from tinyff.neighborlist import NBuildSimple
 
@@ -204,6 +205,54 @@ For example:
 
 ```python
 npy_writer = NPYWriter("traj", stride=100)
+```
+
+
+### Monte Carlo: partial updates
+
+TinyFF supports partial updates in which the change in energy is computed due to the
+displacement of a single atom with the methods `ForceField.try_move` and `ForceField.accept_move`.
+These methods assume that a neighborlist was previously built.
+They will only recompute results for known pairs of atoms, without adding or removing pairs.
+This implies that your Monte Carlo implementation needs to take care of the following:
+
+- Build an initial neighborlist before starting the Monte Carlo loop.
+- Construct the neighborlist up to a radius `rmax`, which must extend beyond the cutoff radius.
+- Rebuild the neighborlist at regular intervals, e.g. by calling `ForceField.compute`,
+  which will also compute the energy by default.
+  At this stage it is useful to check whether the new energy is still consistent
+  with the sum of all energy changes due to accepted Monte Carlo moves.
+
+The following example just shows how to call the functions.
+You can use these function calls in your Monte Carlo loop:
+
+```python
+import numpy as np
+from tinyff.atomsmithy import build_fcc_lattice
+from tinyff.forcefield import CutOffWrapper, LennardJones, ForceField
+from tinyff.neighborlist import NBuildSimple
+
+# System configuration, a simple (inflated) FCC lattice of Argon atoms.
+atpos = build_fcc_lattice(2.5, 4)
+cell_lengths = np.array([10.0, 10.0, 10.0])
+rmax = 3.0
+rcut = 2.5
+
+# Define the force field and compute the initial energy.
+lj = CutOffWrapper(LennardJones(2.5, 2.0), rcut)
+ff = ForceField([lj], NBuildSimple(rmax))
+energy0, = ff.compute(atpos, cell_length)
+
+# Try and accept a move of atom 3.
+iatom = 3
+delta = np.array([0.1, 0.2, -0.1])
+energy_change, move = ff.try_move(iatom, delta, cell_lengths)
+ff.accept_move(move)
+atpos[iatom] += delta
+
+# Verify the change in energy.
+energy1, = ff.compute(atpos, cell_length)
+assert abs(energy_change - (energy1 - energy0)) < 1e-10
 ```
 
 

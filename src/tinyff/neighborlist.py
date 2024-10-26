@@ -65,12 +65,14 @@ class NBuild:
     _nlist_use_count: int = attrs.field(converter=int, default=0, init=False)
     """Internal counter to decide when to rebuild neigborlist."""
 
+    _atom_cache: dict[int] = attrs.field(init=False, factory=dict)
+
     @property
     def nlist_use_count(self):
         """The number of times the current neighborlist will be reused in future calculations."""
         return self._nlist_use_count
 
-    def update(self, atpos: ArrayLike, cell_lengths: ArrayLike):
+    def update(self, atpos: ArrayLike, cell_lengths: ArrayLike) -> NDArray[float]:
         """Rebuild or recompute the neighbor list.
 
         Parameters
@@ -80,6 +82,12 @@ class NBuild:
             Array shape = (natom, 3).
         cell_lengths
             The lengths of a periodic orthorombic box.
+
+        Returns
+        -------
+        cell_lengths
+            The interpreted version of cell_lengths,
+            guaranteed to be an array with three elements.
         """
         # Rebuild or recompute the neighborlist
         if self._nlist_use_count <= 1:
@@ -87,70 +95,132 @@ class NBuild:
         else:
             self._nlist_use_count -= 1
         if self.nlist is None:
-            self._rebuild(atpos, cell_lengths)
+            cell_lengths = self._rebuild(atpos, cell_lengths)
             self._nlist_use_count = self.nlist_reuse
+            self._atom_cache = {}
         else:
-            self._recompute(atpos, cell_lengths)
+            cell_lengths = self._recompute(atpos, cell_lengths)
+        return cell_lengths
 
-    def _rebuild(self, atpos: ArrayLike, cell_lengths: ArrayLike):
+    def _rebuild(self, atpos: ArrayLike, cell_lengths: ArrayLike) -> NDArray[float]:
         """Build the neighborlist array from scratch, possibly identifying new pairs."""
         raise NotImplementedError
 
-    def _recompute(self, atpos: ArrayLike, cell_lengths: ArrayLike):
+    def _recompute(self, atpos: ArrayLike, cell_lengths: ArrayLike) -> NDArray[float]:
         """Recompute deltas and distances and reset other parts of the neighborlist in-place."""
         # Process parameters.
         atpos = parse_atpos(atpos)
         cell_lengths = parse_cell_lengths(cell_lengths, self.rmax)
 
         # Do some work.
-        deltas, dists = _mic(atpos, self.nlist["iatom0"], self.nlist["iatom1"], cell_lengths)
+        _compute_delta(atpos, self.nlist["iatom0"], self.nlist["iatom1"], out=self.nlist["delta"])
+        self.nlist["dist"] = _apply_mic(self.nlist["delta"], cell_lengths)
 
-        # Update or reset fields in the neigborlist.
-        self.nlist["delta"] = deltas
-        self.nlist["dist"] = dists
+        # Reset outdated fields in the neigborlist.
         self.nlist["gdelta"] = 0.0
         self.nlist["gdist"] = 0.0
         self.nlist["energy"] = 0.0
 
+        return cell_lengths
 
-def _mic(
+    def try_move(self, iatom: int, delta: NDArray[float], cell_lengths: ArrayLike | float):
+        """Compute a subset of the neighborlist after displacing one atom.
+
+        Parameters
+        ----------
+        iatom
+            The atom to move.
+        delta
+            The displacement vector.
+        cell_lengths
+            An array (with 3 elements) defining the size of the simulation cell.
+
+        Returns
+        -------
+        select
+            The indexes of the global neighborlist that were updated.
+        nlist
+            The modified subset of the neigborlist.
+        """
+        if not isinstance(iatom, int):
+            raise TypeError("The argument iatom must be an integer.")
+        delta = np.asarray(delta, dtype=float)
+        if delta.shape != (3,):
+            raise TypeError("The displacement vector delta must have shape (3,).")
+        cell_lengths = parse_cell_lengths(cell_lengths)
+
+        # Find the related rows in the neighborlist
+        info = self._atom_cache.get(iatom)
+        if info is None:
+            select0 = np.where(self.nlist["iatom0"] == iatom)[0]
+            select1 = np.where(self.nlist["iatom1"] == iatom)[0]
+            select = np.concatenate([select0, select1])
+            signs = np.ones(len(select))
+            signs[: len(select0)] = -1
+            signs.shape = (-1, 1)
+            self._atom_cache[iatom] = (select, signs)
+        else:
+            select, signs = info
+
+        # Update the copied fragments of the neighborlist with the displacement.
+        nlist = self.nlist.take(select)
+        nlist["delta"] += delta * signs
+        nlist["dist"] = _apply_mic(nlist["delta"], cell_lengths)
+        return select, nlist
+
+
+def _compute_delta(
     atpos: NDArray[float],
     iatoms0: NDArray[int],
     iatoms1: NDArray[int],
-    cell_lengths: NDArray[float],
-) -> tuple[NDArray[float], NDArray[float]]:
-    """Compute distances and relative vectors with the minimum image convention.
+    out: NDArray[float] | None = None,
+):
+    """Compute relative vectors efficiently.
 
     Parameters
     ----------
     atpos
-        Atomic positions, one atom per row.
-        Array shape = (natom, 3).
+        The atomic positions.
     iatoms0
         Indexes of atoms where the relative vectors start.
     iatoms1
-        Corresponding indexes of atoms where the relative vectors end.
+        Indexes of atoms where the relative vectors end.
+    out
+        Optional output argument to avoid array creation.
+
+    Returns
+    -------
+    deltas
+        Relative vectors.
+    """
+    if out is None:
+        out = np.zeros((len(iatoms0), 3), float)
+    atpos.take(iatoms1, axis=0, out=out)
+    out -= atpos[iatoms0]
+    return out
+
+
+def _apply_mic(deltas: NDArray[float], cell_lengths: NDArray[float]):
+    """Apply the minimum image convention to the deltas and compute the distances.
+
+    Parameters
+    ----------
+    deltas
+        Relative vectors to which the minimum image convention must be applied,
+        an array with shape (natom, 3) in which each row is one relative vector.
+        The vectors are modified in place.
     cell_lengths
         The lengths of a periodic orthorombic box.
 
     Returns
     -------
-    deltas
-        The relative vectors of the minimal distances.
     dists
-        The corresponding lengths of the relative vectors.
+        An array with lengths of the (updated) relative vectors.
     """
-    # Construct the relative vectors
-    atrel = atpos[iatoms1] - atpos[iatoms0]
-
-    # Apply the minimum image convention
-    frrel = atrel / cell_lengths
-    atmic = (frrel - np.round(frrel)) * cell_lengths
-
-    # Compute distances and filter
-    atd = np.linalg.norm(atmic, axis=1)
-
-    return atmic, atd
+    deltas /= cell_lengths
+    deltas -= np.round(deltas)
+    deltas *= cell_lengths
+    return np.linalg.norm(deltas, axis=1)
 
 
 @attrs.define
@@ -174,6 +244,8 @@ class NBuildSimple(NBuild):
         self.nlist["iatom1"] = iatoms1
         self.nlist["delta"] = deltas
         self.nlist["dist"] = dists
+
+        return cell_lengths
 
 
 @attrs.define
@@ -214,6 +286,8 @@ class NBuildCellLists(NBuild):
             self.nlist["iatom1"] = np.concatenate(iatoms1_parts)
             self.nlist["delta"] = np.concatenate(deltas_parts)
             self.nlist["dist"] = dists
+
+        return cell_lengths
 
 
 def _assign_atoms_to_bins(
@@ -286,7 +360,8 @@ def _create_parts_self(
         i0, i1 = np.triu_indices(len(bin0), 1)
         iatoms0 = bin0[i0]
         iatoms1 = bin0[i1]
-    deltas, dists = _mic(atpos, iatoms0, iatoms1, cell_lengths)
+    deltas = _compute_delta(atpos, iatoms0, iatoms1)
+    dists = _apply_mic(deltas, cell_lengths)
     mask = dists <= rmax
     return iatoms0[mask], iatoms1[mask], deltas[mask], dists[mask]
 
@@ -371,6 +446,7 @@ def _create_parts_nearby(
     """
     iatoms0 = np.repeat(bin0, len(bin1))
     iatoms1 = np.tile(bin1, len(bin0))
-    deltas, dists = _mic(atpos, iatoms0, iatoms1, cell_lengths)
+    deltas = _compute_delta(atpos, iatoms0, iatoms1)
+    dists = _apply_mic(deltas, cell_lengths)
     mask = dists <= rmax
     return iatoms0[mask], iatoms1[mask], deltas[mask], dists[mask]

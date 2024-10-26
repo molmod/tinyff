@@ -94,10 +94,10 @@ class PushPotential(PairPotential):
         x = dist / self.rcut
         results = []
         if do_energy:
-            energy = (x - 1) ** 2
+            energy = (x - 1) ** 2 * (x < 1)
             results.append(energy)
         if do_gdist:
-            gdist = 2 * (x - 1) / self.rcut
+            gdist = 2 * (x - 1) / self.rcut * (x < 1)
             results.append(gdist)
         return results
 

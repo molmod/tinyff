@@ -71,7 +71,7 @@ class LennardJones(PairPotential):
             energy = (4 * self.epsilon) * (x**12 - x**6)
             result.append(energy)
         if do_gdist:
-            gdist = (-4 * self.epsilon * self.sigma) * (12 * x**11 - 6 * x**5) / dist**2
+            gdist = (-24 * self.epsilon * self.sigma) * (2 * x**11 - x**5) / dist**2
             result.append(gdist)
         return result
 
@@ -127,6 +127,17 @@ class CutOffWrapper(PairPotential):
 
 
 @attrs.define
+class Move:
+    """All information needed to update the force field internals after accepting a MC move."""
+
+    select: NDArray[int] = attrs.field()
+    """Indexes of the rows in the neighborlist involving the moved atom."""
+
+    nlist: NDArray[NLIST_DTYPE] = attrs.field()
+    """Part of the neighborlist corresponding to select, with changes due to the trial step."""
+
+
+@attrs.define
 class ForceField:
     force_terms: list[ForceTerm] = attrs.field()
     """A list of contributions to the potential energy."""
@@ -160,7 +171,7 @@ class ForceField:
     def compute(
         self,
         atpos: NDArray,
-        cell_length: float,
+        cell_lengths: ArrayLike | float,
         do_energy: bool = True,
         do_forces: bool = False,
         do_press: bool = False,
@@ -173,7 +184,8 @@ class ForceField:
             Atomic positions, one atom per row.
             Array shape = (natom, 3).
         cell_length
-            The length of the edge of the cubic simulation cell.
+            The length of the edge of the cubic simulation cell,
+            or an array of lengths of three cell vectors.
         do_energy
             if True, the energy is returned.
         do_forces
@@ -187,7 +199,7 @@ class ForceField:
             A list containing the requested values.
         """
         # Bring neighborlist up to date.
-        self.nbuild.update(atpos, cell_length)
+        cell_lengths = self.nbuild.update(atpos, cell_lengths)
         nlist = self.nbuild.nlist
 
         # Compute all pairwise quantities, if needed with derivatives.
@@ -203,11 +215,59 @@ class ForceField:
             nlist["gdelta"] = (nlist["gdist"] / nlist["dist"]).reshape(-1, 1) * nlist["delta"]
             if do_forces:
                 atfrc = np.zeros(atpos.shape, dtype=float)
+                np.subtract.at(atfrc, nlist["iatom1"], nlist["gdelta"])
                 np.add.at(atfrc, nlist["iatom0"], nlist["gdelta"])
-                np.add.at(atfrc, nlist["iatom1"], -nlist["gdelta"])
                 results.append(atfrc)
             if do_press:
-                frc_press = -np.dot(nlist["gdist"], nlist["dist"]) / (3 * cell_length**3)
+                frc_press = -np.dot(nlist["gdist"], nlist["dist"]) / (3 * cell_lengths.prod())
                 results.append(frc_press)
 
         return results
+
+    def try_move(self, iatom: int, delta: NDArray[float], cell_lengths: NDArray[float]):
+        """Try moving one atom and compute the change in energy.
+
+        Parameters
+        ----------
+        iatom
+            The atom to move.
+        delta
+            The displacement vector.
+        cell_lengths
+            An array (with 3 elements) defining the size of the simulation cell.
+
+        Returns
+        -------
+        energy_change
+            The change in energy due to the displacement of the atom.
+        move
+            Information to passed on the method `accept_move` to upate the internal
+            state of the force field after the move was accepted.
+            When not calling `accept_move`, it is assumed that the move was rejected.
+        """
+        select, nlist = self.nbuild.try_move(iatom, delta, cell_lengths)
+
+        # Copy the old energy still present in the neighborlist
+        energy_old = nlist["energy"].sum()
+
+        # Clear results from the neighborlists and compute energy.
+        nlist["energy"] = 0.0
+        nlist["gdist"] = 0.0
+        for force_term in self.force_terms:
+            force_term.compute_nlist(nlist)
+
+        # Prepare return values
+        energy_new = nlist["energy"].sum()
+        return energy_new - energy_old, Move(select, nlist)
+
+    def accept_move(self, move: Move):
+        """Update the internal state of the force field object after accepting a move.
+
+        If a move is rejected, simply do not call this method.
+
+        Parameters
+        ----------
+        move
+            The second return value the `try_move` method.
+        """
+        self.nbuild.nlist[move.select] = move.nlist

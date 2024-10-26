@@ -200,3 +200,66 @@ def test_superposition(nbuild_class):
     assert energy_lj + energy_pp == pytest.approx(energy_su)
     assert forces_lj + forces_pp == pytest.approx(forces_su)
     assert frc_press_lj + frc_press_pp == pytest.approx(frc_press_su)
+
+
+@pytest.mark.parametrize("nbuild_class", [NBuildSimple, NBuildCellLists])
+def test_try_accept_move_simple(nbuild_class):
+    atpos0 = np.array([[0.0, 0.0, 2.0], [0.0, 0.0, 0.0], [0.0, 1.0, 0.0]])
+    delta = np.array([1.0, 0.4, -0.3])
+    atpos1 = atpos0.copy()
+    iatom = 1
+    atpos1[iatom] += delta
+    cell_length = 10.0
+    rcut = 4.9
+
+    ff = ForceField([PushPotential(rcut)], nbuild_class(rcut))
+    (energy1,) = ff.compute(atpos1, cell_length)
+    (energy0,) = ff.compute(atpos0, cell_length)
+    assert (ff.nbuild.nlist["gdelta"] == 0).all()
+
+    energy_change, move = ff.try_move(1, delta, cell_length)
+    # Check basics
+    assert energy_change == pytest.approx(energy1 - energy0)
+    assert (move.nlist["iatom0"] == ff.nbuild.nlist["iatom0"][move.select]).all()
+    assert (move.nlist["iatom1"] == ff.nbuild.nlist["iatom1"][move.select]).all()
+    assert move.nlist["dist"] != pytest.approx(ff.nbuild.nlist["dist"][move.select])
+    assert move.nlist["delta"] != pytest.approx(ff.nbuild.nlist["delta"][move.select])
+    assert move.nlist["energy"] != pytest.approx(ff.nbuild.nlist["energy"][move.select])
+    assert (move.nlist["energy"] != 0).any()
+    assert (move.nlist["gdelta"] == 0).all()
+    # Check details
+    for im, il in enumerate(move.select):
+        if move.nlist["iatom0"][im] == iatom:
+            assert move.nlist["delta"][im] == pytest.approx(ff.nbuild.nlist["delta"][il] - delta)
+        elif move.nlist["iatom1"][im] == iatom:
+            assert move.nlist["delta"][im] == pytest.approx(ff.nbuild.nlist["delta"][il] + delta)
+        else:
+            raise AssertionError("Unrelated nlist row in move.")
+
+    ff.accept_move(move)
+    assert move.nlist["dist"] == pytest.approx(ff.nbuild.nlist["dist"][move.select])
+    assert move.nlist["delta"] == pytest.approx(ff.nbuild.nlist["delta"][move.select])
+    assert move.nlist["energy"] == pytest.approx(ff.nbuild.nlist["energy"][move.select])
+    assert (move.nlist["gdelta"] == 0).all()
+
+
+@pytest.mark.parametrize("nbuild_class", [NBuildSimple, NBuildCellLists])
+def test_try_accept_move_random(nbuild_class):
+    natom = 50
+    cell_length = 10.0
+    rmax = 4.9
+    rcut = 3.2
+    ff = ForceField([PushPotential(rcut)], nbuild_class(rmax))
+    rng = np.random.default_rng(42)
+    atpos0 = rng.uniform(-cell_length, 2 * cell_length, (natom, 3))
+    for _ in range(100):
+        delta = rng.uniform(-0.1, 0.1, 3)
+        iatom = int(rng.integers(natom))
+        atpos1 = atpos0.copy()
+        atpos1[iatom] += delta
+
+        (energy1,) = ff.compute(atpos1, cell_length)
+        (energy0,) = ff.compute(atpos0, cell_length)
+        energy_change, move = ff.try_move(iatom, delta, cell_length)
+        assert abs((move.nlist["delta"] <= cell_length / 2).all())
+        assert energy_change == pytest.approx(energy1 - energy0)
