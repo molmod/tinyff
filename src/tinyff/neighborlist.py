@@ -320,11 +320,15 @@ def _create_parts_self(
         Distances between pairs.
     """
     if bin0 is None:
-        iatoms0, iatoms1 = np.triu_indices(atpos.shape[0], 1)
+        natom = atpos.shape[0]
+        iatoms0 = np.tile(np.arange(natom), natom)
+        iatoms1 = np.repeat(np.arange(natom), natom)
     else:
-        i0, i1 = np.triu_indices(len(bin0), 1)
-        iatoms0 = bin0[i0]
-        iatoms1 = bin0[i1]
+        iatoms0 = np.tile(bin0, len(bin0))
+        iatoms1 = np.repeat(bin0, len(bin0))
+    mask = iatoms0 < iatoms1
+    iatoms0 = iatoms0[mask]
+    iatoms1 = iatoms1[mask]
     deltas = atpos[iatoms1] - atpos[iatoms0]
     dists = _apply_mic(deltas, cell_lengths)
     mask = dists <= rmax
