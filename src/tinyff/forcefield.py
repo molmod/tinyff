@@ -23,111 +23,9 @@ import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
 from .neighborlist import NLIST_DTYPE, NBuild
+from .pairwise import PairwiseTerm
 
-__all__ = ("ForceTerm", "PairPotential", "LennardJones", "CutOffWrapper", "ForceField")
-
-
-@attrs.define
-class ForceTerm:
-    def compute_nlist(
-        self, nlist: NDArray[NLIST_DTYPE], do_energy: bool = True, do_gdist: bool = False
-    ):
-        """Compute energies and derivatives and add them to the neighborlist."""
-        raise NotImplementedError  # pragma: nocover
-
-
-@attrs.define
-class PairPotential:
-    def compute_nlist(
-        self, nlist: NDArray[NLIST_DTYPE], do_energy: bool = True, do_gdist: bool = False
-    ):
-        """Compute energies and derivatives and add them to the neighborlist."""
-        results = self.compute(nlist["dist"], do_energy, do_gdist)
-        if do_energy:
-            nlist["energy"] += results.pop(0)
-        if do_gdist:
-            nlist["gdist"] += results.pop(0)
-
-    def compute(
-        self, dist: ArrayLike, do_energy: bool = True, do_gdist: bool = False
-    ) -> list[NDArray]:
-        """Compute pair potential energy and its derivative towards distance."""
-        raise NotImplementedError  # pragma: nocover
-
-
-@attrs.define
-class LennardJones(PairPotential):
-    epsilon: float = attrs.field(converter=float)
-    sigma: float = attrs.field(converter=float)
-
-    def compute(
-        self, dist: ArrayLike, do_energy: bool = True, do_gdist: bool = False
-    ) -> list[NDArray]:
-        """Compute pair potential energy and its derivative towards distance."""
-        results = []
-        dist = np.asarray(dist, dtype=float)
-        x = self.sigma / dist
-        x2 = x * x
-        x3 = x2 * x
-        x5 = x2 * x3
-        x6 = x3 * x3
-        if do_energy:
-            energy = (4 * self.epsilon) * ((x6 - 1) * x6)
-            results.append(energy)
-        if do_gdist:
-            gdist = (-48 * self.epsilon * self.sigma) * ((x6 - 0.5) * x5 / dist / dist)
-            results.append(gdist)
-        return results
-
-
-@attrs.define
-class CutOffWrapper(PairPotential):
-    original: PairPotential = attrs.field()
-    rcut: float = attrs.field(converter=float)
-    ecut: float = attrs.field(init=False, default=0.0, converter=float)
-    gcut: float = attrs.field(init=False, default=0.0, converter=float)
-
-    def __attrs_post_init__(self):
-        """Post initialization changes."""
-        self.ecut, self.gcut = self.original.compute(self.rcut, do_gdist=True)
-
-    def compute(
-        self, dist: ArrayLike, do_energy: bool = True, do_gdist: bool = False
-    ) -> list[NDArray]:
-        """Compute pair potential energy and its derivative towards distance."""
-        dist = np.asarray(dist, dtype=float)
-        mask = dist < self.rcut
-        results = []
-        if mask.ndim == 0:
-            # Deal with non-array case
-            if mask:
-                orig_results = self.original.compute(dist, do_energy, do_gdist)
-                if do_energy:
-                    energy = orig_results.pop(0)
-                    energy -= self.ecut + self.gcut * (dist - self.rcut)
-                    results.append(energy)
-                if do_gdist:
-                    gdist = orig_results.pop(0)
-                    gdist -= self.gcut
-                    results.append(gdist)
-            else:
-                if do_energy:
-                    results.append(0.0)
-                if do_gdist:
-                    results.append(0.0)
-        else:
-            orig_results = self.original.compute(dist, do_energy, do_gdist)
-            if do_energy:
-                energy = orig_results.pop(0)
-                energy -= self.ecut + self.gcut * (dist - self.rcut)
-                energy *= mask
-                results.append(energy)
-            if do_gdist:
-                gdist = orig_results.pop(0)
-                gdist -= self.gcut
-                gdist *= mask
-                results.append(gdist)
-        return results
+__all__ = ("Move", "ForceField")
 
 
 @attrs.define
@@ -143,39 +41,17 @@ class Move:
 
 @attrs.define
 class ForceField:
-    force_terms: list[ForceTerm] = attrs.field()
+    pairwise_terms: list[PairwiseTerm] = attrs.field()
     """A list of contributions to the potential energy."""
 
-    nbuild: NBuild = attrs.field(validator=attrs.validators.instance_of(NBuild))
+    nbuild: NBuild = attrs.field(validator=attrs.validators.instance_of(NBuild), kw_only=True)
     """Algorithm to build the neigborlist."""
-
-    def __call__(self, atpos: NDArray, cell_length: float):
-        """Compute the potential energy, atomic forces and the force contribution to the pressure.
-
-        Parameters
-        ----------
-        atpos
-            Atomic positions, one atom per row.
-            Array shape = (natom, 3).
-        cell_length
-            The length of the edge of the cubic simulation cell.
-
-        Returns
-        -------
-        energy
-            The potential energy.
-        forces
-            The forces acting on the atoms, same shape as atpos.
-        frc_pressure
-            The force-contribution to the pressure,
-            i.e. usually the second term of the virial stress in most text books.
-        """
-        return self.compute(atpos, cell_length, do_forces=True, do_press=True)
 
     def compute(
         self,
         atpos: NDArray,
         cell_lengths: ArrayLike | float,
+        *,
         do_energy: bool = True,
         do_forces: bool = False,
         do_press: bool = False,
@@ -207,8 +83,8 @@ class ForceField:
         nlist = self.nbuild.nlist
 
         # Compute all pairwise quantities, if needed with derivatives.
-        for force_term in self.force_terms:
-            force_term.compute_nlist(nlist, do_energy, do_forces | do_press)
+        for pairwise_term in self.pairwise_terms:
+            pairwise_term.compute_nlist(nlist, do_energy, do_forces | do_press)
 
         # Compute the totals
         results = []
@@ -257,8 +133,8 @@ class ForceField:
         # Clear results from the neighborlists and compute energy.
         nlist["energy"] = 0.0
         nlist["gdist"] = 0.0
-        for force_term in self.force_terms:
-            force_term.compute_nlist(nlist)
+        for pairwise_term in self.pairwise_terms:
+            pairwise_term.compute_nlist(nlist)
 
         # Prepare return values
         energy_new = nlist["energy"].sum()

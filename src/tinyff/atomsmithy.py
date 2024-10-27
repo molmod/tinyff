@@ -18,13 +18,13 @@
 # --
 """Tools to build initial atomic positions."""
 
-import attrs
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 from scipy.optimize import minimize
 
-from .forcefield import ForceField, PairPotential
+from .forcefield import ForceField
 from .neighborlist import NBuild, NBuildSimple
+from .pairwise import CheapRepulsion
 
 __all__ = (
     "build_general_cubic_lattice",
@@ -80,29 +80,6 @@ def build_fcc_lattice(prim_length: float, nrep: int):
     return build_general_cubic_lattice(prim_frpos, prim_length, nrep)
 
 
-@attrs.define
-class PushPotential(PairPotential):
-    """Simple and cheap repulsive potential that smoothly goes to zero at cutoff."""
-
-    rcut: float = attrs.field(converter=float, validator=attrs.validators.gt(0))
-
-    def compute(
-        self, dist: ArrayLike, do_energy: bool = True, do_gdist: bool = False
-    ) -> list[NDArray | None]:
-        """Compute pair potential energy and its derivative towards distance."""
-        dist = np.asarray(dist, dtype=float)
-        x = dist / self.rcut
-        results = []
-        common = (x - 1) * (x < 1)
-        if do_energy:
-            energy = common * common
-            results.append(energy)
-        if do_gdist:
-            gdist = (2 / self.rcut) * common
-            results.append(gdist)
-        return results
-
-
 def build_random_cell(
     cell_length: float,
     natom: int,
@@ -121,7 +98,7 @@ def build_random_cell(
     # Define cost function to push the atoms appart.
     if nbuild is None:
         nbuild = NBuildSimple(rcut)
-    ff = ForceField([PushPotential(rcut)], nbuild)
+    ff = ForceField([CheapRepulsion(rcut)], nbuild=nbuild)
 
     def costgrad(atpos_raveled):
         atpos = atpos_raveled.reshape(-1, 3)

@@ -40,11 +40,14 @@ pip install tinyff
 TinyFF is a Python package with the following modules:
 
 - `tinyff.atomsmithy`: functions for creating initial atomic positions.
-- `tinyff.forcefield`: implements a pairwise force field: energy, atomic forces and pressure
+- `tinyff.forcefield`: implements a general force field interface: energy, atomic forces and pressure
+- `tinyff.pairwise`: pairwise potentials to be used in force fields.
 - `tinyff.neighborlist`: used by the `forcefield` module to compute pairwise interactions
    with a real-space cut-off.
 - `tinyff.trajectory`: tools for writing molecular dynamics trajectories to file(s).
 - `tinyff.utils`: utility functions used in `tinyff`.
+
+Most relevant functions and classes can be imported directly from the top-level `tinyff` package.
 
 None of these modules implement any molecular dynamics integrators,
 nor any post-processing of molecular dynamics trajectories.
@@ -59,15 +62,14 @@ The evaluation of the force field energy and its derivatives requires the follow
 
 ```python
 import numpy as np
-from tinyff.forcefield import CutOffWrapper, LennardJones, ForceField
-from tinyff.neighborlist import NBuildSimple
+from tinyff import CutOffWrapper, LennardJones, ForceField, NBuildSimple
 
 # Define a pairwise potential, with energy and force shift
 rcut = 5.0
 lj = CutOffWrapper(LennardJones(2.5, 2.0), rcut)
 
 # Define a force field
-ff = ForceField([lj], NBuildSimple(rcut))
+ff = ForceField([lj], nbuild=NBuildSimple(rcut))
 
 # You need atomic positions and the length of a periodic cell edge.
 # The following line defines just two atomic positions.
@@ -76,19 +78,12 @@ atpos = np.array([[0.0, 0.0, 1.0], [1.0, 2.0, 0.0]])
 # Note that the cell must be large enough to contain the cutoff sphere.
 cell_length = 20.0
 
-# Compute energy-related quantities:
-# - The potential energy.
-# - An array with Cartesian forces, same shape as `atpos`.
-# - The force contribution the pressure
-#   (often the written as the second term in the virial pressure).
-potential_energy, forces, frc_pressure = ff(atpos, cell_length)
-
 # Compute a selection of results with ff.compute.
 #   The ff.compute method has `do_*` arguments to compute only some results:
 #   - `do_energy` (default True)
 #   - `do_forces` (default False)
 #   - `do_press` (default False).
-#   All requested results are put in a list.
+#   Requested results are put in a list, even in only one result is requested.
 potential_energy, forces = ff.compute(atpos, cell_length, do_forces=True)
 ```
 
@@ -99,10 +94,10 @@ into the `ForceField` constructor:
   [cell lists](https://en.wikipedia.org/wiki/Cell_lists) method:
 
     ```python
-    from tinyff.neighborlist import NBuildCellLists
+    from tinyff import NBuildCellLists
 
     # Construct your force field object as follows:
-    ff = ForceField([lj], NBuildCellLists(rcut))
+    ff = ForceField([lj], nbuild=NBuildCellLists(rcut))
     ```
 
     Note that the current cell lists implementation is not very efficient (yet),
@@ -113,17 +108,17 @@ into the `ForceField` constructor:
 
     ```python
     rmax = 6.0  # > rcut, so buffer of 1.0
-    ff = ForceField([lj], NBuildSimple(rmax, nlist_reuse=16))
+    ff = ForceField([lj], nbuild=NBuildSimple(rmax, nlist_reuse=16))
     ```
 
 
 ### Forging initial positions
 
-The `atomsmithy` module can generate a cubic box
+The `atomsmithy` defines functions to generate a cubic box
 with standard lattices or randomized atomic positions:
 
 ```python
-from tinyff.atomsmithy import (
+from tinyff import (
     build_bcc_lattice,
     build_cubic_lattice,
     build_fcc_lattice,
@@ -149,7 +144,7 @@ For visualization with [nglview](https://github.com/nglviewer/nglview),
 TinyFF provides a `PDBWriter`, to be used as follows:
 
 ```python
-from tinyff.trajectory import PDBWriter
+from tinyff import PDBWriter
 
 # Initialization of the writer: specify a file and a conversion factor to angstrom.
 # If the PDB file exists, it is overwritten!
@@ -180,7 +175,7 @@ which makes it possible to extend an NPY file without having to rewrite from scr
 The `NPYWriter` can be used as follows:
 
 ```python
-from tinyff.trajectory import NPYWriter
+from tinyff import NPYWriter
 
 # Initialization, will create (and possibly clean up an existing) a `traj` directory.
 npy_writer = NPYWriter("traj")
@@ -228,9 +223,7 @@ You can use these function calls in your Monte Carlo loop:
 
 ```python
 import numpy as np
-from tinyff.atomsmithy import build_fcc_lattice
-from tinyff.forcefield import CutOffWrapper, LennardJones, ForceField
-from tinyff.neighborlist import NBuildSimple
+from tinyff import build_fcc_lattice, CutOffWrapper, LennardJones, ForceField, NBuildSimple
 
 # System configuration, a simple (inflated) FCC lattice of Argon atoms.
 atpos = build_fcc_lattice(2.5, 4)
@@ -240,7 +233,7 @@ rcut = 2.5
 
 # Define the force field and compute the initial energy.
 lj = CutOffWrapper(LennardJones(2.5, 2.0), rcut)
-ff = ForceField([lj], NBuildSimple(rmax))
+ff = ForceField([lj], nbuild=NBuildSimple(rmax))
 energy0, = ff.compute(atpos, cell_length)
 
 # Try and accept a move of atom 3.

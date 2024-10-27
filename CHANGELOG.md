@@ -19,12 +19,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- The `PairPotential.compute` has a new API:
+- Many performance improvements!
+- The `ForceField` class requires the `NBuild` instance to be provided as a keyword argument.
+  For example: `ForceField([LennardJones()], nbuild=NBuildSimple)`.
+- The `ForceField.__call__` method is replaced by `ForceField.compute`,
+  which has a different API with new `do_*` arguments.
+  By default, only the energy is computed.
+  You must request forces and pressure explicitly.
+  The function always returns a list of results, even if there is only one.
+- The `PairwiseTerm.compute` (previously `PairwisePotential.compute`) has a new API:
   it takes `do_*` arguments to decide what is computed (energy and or derivative).
   It returns a list of requested results.
   By default, only the energy is computed.
-- The `ForceTerm.__call__` method has been replaced by `ForceTerm.compute_nlist`.
+- The `ForceTerm.__call__` method has been replaced by `PairwiseTerm.compute_nlist`.
   (This method is primarily for internal usage.)
+- Module reorganization to simplify the usage of TinyFF:
+  all relevant functions and classes can be imported from the top-level `tinyff` package.
+- Module reorganization: all pairwise potentials are now defined in `tinyff.pairwise`,
+  instead of `tinyff.forcefield`.
+
+### Removed
+
+- The `ForceTerm` base class has been removed.
 
 
 ## [1.0.0] - 2024-10-10

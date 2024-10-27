@@ -22,39 +22,9 @@ import numdifftools as nd
 import numpy as np
 import pytest
 
-from tinyff.atomsmithy import PushPotential
-from tinyff.forcefield import CutOffWrapper, ForceField, LennardJones
+from tinyff.forcefield import ForceField
 from tinyff.neighborlist import NBuildCellLists, NBuildSimple
-
-
-def test_lennard_jones_derivative():
-    lj = LennardJones(2.5, 0.5)
-    dist = np.linspace(0.4, 3.0, 50)
-    gdist1 = lj.compute(dist, do_energy=False, do_gdist=True)[0]
-    gdist2 = nd.Derivative(lambda x: lj.compute(x)[0])(dist)
-    assert gdist1 == pytest.approx(gdist2)
-
-
-def test_lennard_jones_cut_derivative():
-    lj = CutOffWrapper(LennardJones(2.5, 0.5), 3.5)
-    dist = np.linspace(0.4, 5.0, 50)
-    gdist1 = lj.compute(dist, do_energy=False, do_gdist=True)[0]
-    gdist2 = nd.Derivative(lambda x: lj.compute(x)[0])(dist)
-    assert gdist1 == pytest.approx(gdist2)
-
-
-def test_lennard_jones_cut_zero_array():
-    lj = CutOffWrapper(LennardJones(2.5, 0.5), 3.5)
-    e, g = lj.compute([5.0, 3.6], do_gdist=True)
-    assert (e == 0.0).all()
-    assert (g == 0.0).all()
-
-
-def test_lennard_jones_cut_zero_scalar():
-    lj = CutOffWrapper(LennardJones(2.5, 0.5), 3.5)
-    e, g = lj.compute(5.0, do_gdist=True)
-    assert e == 0.0
-    assert g == 0.0
+from tinyff.pairwise import CheapRepulsion, CutOffWrapper, LennardJones
 
 
 @pytest.mark.parametrize("nbuild_class", [NBuildSimple, NBuildCellLists])
@@ -66,10 +36,10 @@ def test_pairwise_force_field_two(nbuild_class):
     # Define the force field.
     rcut = 8.0
     lj = CutOffWrapper(LennardJones(2.5, 1.3), rcut)
-    ff = ForceField([lj], nbuild_class(rcut))
+    ff = ForceField([lj], nbuild=nbuild_class(rcut))
 
     # Compute and check against manual result
-    energy, forces, frc_press = ff(atpos, cell_length)
+    energy, forces, frc_press = ff.compute(atpos, cell_length, do_forces=True, do_press=True)
     d = np.linalg.norm(atpos[0] - atpos[1])
     e, g = lj.compute(d, do_gdist=True)
     assert energy == pytest.approx(e)
@@ -86,19 +56,10 @@ def test_pairwise_force_field_three(nbuild_class):
     # Define the force field.
     rcut = 8.0
     lj = CutOffWrapper(LennardJones(2.5, 1.3), rcut)
-    ff = ForceField([lj], nbuild_class(rcut))
+    ff = ForceField([lj], nbuild=nbuild_class(rcut))
 
     # Compute the energy, the forces and the force contribution pressure.
-    energy1, forces1, frc_press1 = ff(atpos, cell_length)
-
-    # Test that they match separately computed values.
-    assert energy1 == pytest.approx(ff.compute(atpos, cell_length)[0])
-    assert forces1 == pytest.approx(
-        ff.compute(atpos, cell_length, do_energy=False, do_forces=True)[0]
-    )
-    assert frc_press1 == pytest.approx(
-        ff.compute(atpos, cell_length, do_energy=False, do_press=True)[0]
-    )
+    energy1, forces1, frc_press1 = ff.compute(atpos, cell_length, do_forces=True, do_press=True)
 
     # Compute the energy manually and compare.
     dists = [
@@ -151,23 +112,14 @@ def test_pairwise_force_field_fifteen(nbuild_class):
     # Define the force field.
     rcut = 8.0
     lj = CutOffWrapper(LennardJones(2.5, 1.3), rcut)
-    ff = ForceField([lj], nbuild_class(rcut))
+    ff = ForceField([lj], nbuild=nbuild_class(rcut))
 
     # Compute the energy, the forces and the force contribution to the pressure.
-    energy, forces1, frc_press1 = ff(atpos, cell_length)
+    energy, forces1, frc_press1 = ff.compute(atpos, cell_length, do_forces=True, do_press=True)
     assert energy < 0
 
-    # Test that they match separately computed values.
-    assert energy == pytest.approx(ff.compute(atpos, cell_length)[0])
-    assert forces1 == pytest.approx(
-        ff.compute(atpos, cell_length, do_energy=False, do_forces=True)[0]
-    )
-    assert frc_press1 == pytest.approx(
-        ff.compute(atpos, cell_length, do_energy=False, do_press=True)[0]
-    )
-
     # Test forces with numdifftool
-    forces2 = -nd.Gradient(lambda x: ff(x.reshape(-1, 3), cell_length)[0])(atpos)
+    forces2 = -nd.Gradient(lambda x: ff.compute(x.reshape(-1, 3), cell_length)[0])(atpos)
     forces2.shape = (-1, 3)
     assert forces1 == pytest.approx(forces2.reshape(-1, 3))
 
@@ -175,7 +127,7 @@ def test_pairwise_force_field_fifteen(nbuild_class):
     def energy_volume(volume):
         my_cell_length = volume ** (1.0 / 3.0)
         scale = my_cell_length / cell_length
-        return ff(atpos * scale, my_cell_length)[0]
+        return ff.compute(atpos * scale, my_cell_length)[0]
 
     frc_press2 = -nd.Derivative(energy_volume)(cell_length**3)
     assert frc_press1 == pytest.approx(frc_press2)
@@ -189,17 +141,17 @@ def test_superposition(nbuild_class):
     # Define the force field.
     rcut = 4.9
     lj = CutOffWrapper(LennardJones(2.5, 1.3), rcut)
-    pp = PushPotential(rcut)
-    ff_lj = ForceField([lj], nbuild_class(rcut))
-    ff_pp = ForceField([pp], nbuild_class(rcut))
-    ff_su = ForceField([lj, pp], nbuild_class(rcut))
+    cr = CheapRepulsion(rcut)
+    ff_lj = ForceField([lj], nbuild=nbuild_class(rcut))
+    ff_pp = ForceField([cr], nbuild=nbuild_class(rcut))
+    ff_su = ForceField([lj, cr], nbuild=nbuild_class(rcut))
 
-    energy_lj, forces_lj, frc_press_lj = ff_lj(atpos, cell_length)
-    energy_pp, forces_pp, frc_press_pp = ff_pp(atpos, cell_length)
-    energy_su, forces_su, frc_press_su = ff_su(atpos, cell_length)
-    assert energy_lj + energy_pp == pytest.approx(energy_su)
+    ener_lj, forces_lj, press_lj = ff_lj.compute(atpos, cell_length, do_forces=True, do_press=True)
+    ener_pp, forces_pp, press_pp = ff_pp.compute(atpos, cell_length, do_forces=True, do_press=True)
+    ener_su, forces_su, press_su = ff_su.compute(atpos, cell_length, do_forces=True, do_press=True)
+    assert ener_lj + ener_pp == pytest.approx(ener_su)
     assert forces_lj + forces_pp == pytest.approx(forces_su)
-    assert frc_press_lj + frc_press_pp == pytest.approx(frc_press_su)
+    assert press_lj + press_pp == pytest.approx(press_su)
 
 
 @pytest.mark.parametrize("nbuild_class", [NBuildSimple, NBuildCellLists])
@@ -212,7 +164,7 @@ def test_try_accept_move_simple(nbuild_class):
     cell_length = 10.0
     rcut = 4.9
 
-    ff = ForceField([PushPotential(rcut)], nbuild_class(rcut))
+    ff = ForceField([CheapRepulsion(rcut)], nbuild=nbuild_class(rcut))
     (energy1,) = ff.compute(atpos1, cell_length)
     (energy0,) = ff.compute(atpos0, cell_length)
     assert (ff.nbuild.nlist["gdelta"] == 0).all()
@@ -249,7 +201,7 @@ def test_try_accept_move_random(nbuild_class):
     cell_length = 10.0
     rmax = 4.9
     rcut = 3.2
-    ff = ForceField([PushPotential(rcut)], nbuild_class(rmax))
+    ff = ForceField([CheapRepulsion(rcut)], nbuild=nbuild_class(rmax))
     rng = np.random.default_rng(42)
     atpos0 = rng.uniform(-cell_length, 2 * cell_length, (natom, 3))
     for _ in range(100):
