@@ -27,8 +27,8 @@ from tinyff.neighborlist import NBuildCellLists, NBuildSimple
 from tinyff.pairwise import CheapRepulsion, CutOffWrapper, LennardJones
 
 
-@pytest.mark.parametrize("nbuild_class", [NBuildSimple, NBuildCellLists])
-def test_pairwise_force_field_two(nbuild_class):
+@pytest.mark.parametrize("nbuild", [NBuildSimple(8.0), NBuildCellLists(8.0, nbin_approx=8)])
+def test_pairwise_force_field_two(nbuild):
     # Build a simple model for testing.
     cell_length = 20.0
     atpos = np.array([[0.0, 0.0, 0.0], [2.0, 0.0, 0.0]])
@@ -36,7 +36,7 @@ def test_pairwise_force_field_two(nbuild_class):
     # Define the force field.
     rcut = 8.0
     lj = CutOffWrapper(LennardJones(2.5, 1.3), rcut)
-    ff = ForceField([lj], nbuild=nbuild_class(rcut))
+    ff = ForceField([lj], nbuild=nbuild)
 
     # Compute and check against manual result
     energy, forces, frc_press = ff.compute(atpos, cell_length, do_forces=True, do_press=True)
@@ -47,8 +47,8 @@ def test_pairwise_force_field_two(nbuild_class):
     assert frc_press == pytest.approx(-g * d / (3 * cell_length**3))
 
 
-@pytest.mark.parametrize("nbuild_class", [NBuildSimple, NBuildCellLists])
-def test_pairwise_force_field_three(nbuild_class):
+@pytest.mark.parametrize("nbuild", [NBuildSimple(8.0), NBuildCellLists(8.0, nbin_approx=8)])
+def test_pairwise_force_field_three(nbuild):
     # Build a simple model for testing.
     cell_length = 20.0
     atpos = np.array([[0.0, 0.0, 0.0], [0.0, 5.0, 2.5], [0.0, 5.0, -2.5]])
@@ -56,7 +56,7 @@ def test_pairwise_force_field_three(nbuild_class):
     # Define the force field.
     rcut = 8.0
     lj = CutOffWrapper(LennardJones(2.5, 1.3), rcut)
-    ff = ForceField([lj], nbuild=nbuild_class(rcut))
+    ff = ForceField([lj], nbuild=nbuild)
 
     # Compute the energy, the forces and the force contribution pressure.
     energy1, forces1, frc_press1 = ff.compute(atpos, cell_length, do_forces=True, do_press=True)
@@ -85,8 +85,8 @@ def test_pairwise_force_field_three(nbuild_class):
     assert frc_press1 == pytest.approx(frc_press2)
 
 
-@pytest.mark.parametrize("nbuild_class", [NBuildSimple, NBuildCellLists])
-def test_pairwise_force_field_fifteen(nbuild_class):
+@pytest.mark.parametrize("nbuild", [NBuildSimple(8.0), NBuildCellLists(8.0, nbin_approx=8)])
+def test_pairwise_force_field_fifteen(nbuild):
     # Build a simple model for testing.
     cell_length = 20.0
     atpos = np.array(
@@ -112,7 +112,7 @@ def test_pairwise_force_field_fifteen(nbuild_class):
     # Define the force field.
     rcut = 8.0
     lj = CutOffWrapper(LennardJones(2.5, 1.3), rcut)
-    ff = ForceField([lj], nbuild=nbuild_class(rcut))
+    ff = ForceField([lj], nbuild=nbuild)
 
     # Compute the energy, the forces and the force contribution to the pressure.
     energy, forces1, frc_press1 = ff.compute(atpos, cell_length, do_forces=True, do_press=True)
@@ -133,8 +133,10 @@ def test_pairwise_force_field_fifteen(nbuild_class):
     assert frc_press1 == pytest.approx(frc_press2)
 
 
-@pytest.mark.parametrize("nbuild_class", [NBuildSimple, NBuildCellLists])
-def test_superposition(nbuild_class):
+@pytest.mark.parametrize(
+    ("nbuild_class", "kwargs"), [(NBuildSimple, {}), (NBuildCellLists, {"nbin_approx": 8})]
+)
+def test_superposition(nbuild_class, kwargs):
     atpos = np.array([[0.0, 0.0, 5.0], [0.0, 0.0, 0.0], [0.0, 3.0, 0.0]])
     cell_length = 10.0
 
@@ -142,9 +144,9 @@ def test_superposition(nbuild_class):
     rcut = 4.9
     lj = CutOffWrapper(LennardJones(2.5, 1.3), rcut)
     cr = CheapRepulsion(rcut)
-    ff_lj = ForceField([lj], nbuild=nbuild_class(rcut))
-    ff_pp = ForceField([cr], nbuild=nbuild_class(rcut))
-    ff_su = ForceField([lj, cr], nbuild=nbuild_class(rcut))
+    ff_lj = ForceField([lj], nbuild=nbuild_class(rcut, **kwargs))
+    ff_pp = ForceField([cr], nbuild=nbuild_class(rcut, **kwargs))
+    ff_su = ForceField([lj, cr], nbuild=nbuild_class(rcut, **kwargs))
 
     ener_lj, forces_lj, press_lj = ff_lj.compute(atpos, cell_length, do_forces=True, do_press=True)
     ener_pp, forces_pp, press_pp = ff_pp.compute(atpos, cell_length, do_forces=True, do_press=True)
@@ -154,8 +156,8 @@ def test_superposition(nbuild_class):
     assert press_lj + press_pp == pytest.approx(press_su)
 
 
-@pytest.mark.parametrize("nbuild_class", [NBuildSimple, NBuildCellLists])
-def test_try_accept_move_simple(nbuild_class):
+@pytest.mark.parametrize("nbuild", [NBuildSimple(5.0), NBuildCellLists(5.0, nbin_approx=8)])
+def test_try_accept_move_simple(nbuild):
     atpos0 = np.array([[0.0, 0.0, 2.0], [0.0, 0.0, 0.0], [0.0, 1.0, 0.0]])
     delta = np.array([1.0, 0.4, -0.3])
     atpos1 = atpos0.copy()
@@ -164,7 +166,7 @@ def test_try_accept_move_simple(nbuild_class):
     cell_length = 10.0
     rcut = 4.9
 
-    ff = ForceField([CheapRepulsion(rcut)], nbuild=nbuild_class(rcut))
+    ff = ForceField([CheapRepulsion(rcut)], nbuild=nbuild)
     (energy1,) = ff.compute(atpos1, cell_length)
     (energy0,) = ff.compute(atpos0, cell_length)
     assert (ff.nbuild.nlist["gdelta"] == 0).all()
@@ -195,13 +197,12 @@ def test_try_accept_move_simple(nbuild_class):
     assert (move.nlist["gdelta"] == 0).all()
 
 
-@pytest.mark.parametrize("nbuild_class", [NBuildSimple, NBuildCellLists])
-def test_try_accept_move_random(nbuild_class):
+@pytest.mark.parametrize("nbuild", [NBuildSimple(4.9), NBuildCellLists(4.9, nbin_approx=8)])
+def test_try_accept_move_random(nbuild):
     natom = 50
     cell_length = 10.0
-    rmax = 4.9
     rcut = 3.2
-    ff = ForceField([CheapRepulsion(rcut)], nbuild=nbuild_class(rmax))
+    ff = ForceField([CheapRepulsion(rcut)], nbuild=nbuild)
     rng = np.random.default_rng(42)
     atpos0 = rng.uniform(-cell_length, 2 * cell_length, (natom, 3))
     for _ in range(100):

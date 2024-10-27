@@ -28,6 +28,7 @@ from tinyff.neighborlist import (
     _assign_atoms_to_bins,
     _create_parts_nearby,
     _create_parts_self,
+    _determine_nbins,
     _iter_nearby,
 )
 
@@ -56,14 +57,29 @@ def test_mic_random():
     assert (dists <= np.linalg.norm(cell_lengths) / 2).all()
 
 
+def test_determine_nbins_ortho1():
+    cell_lengths = np.array([5.0, 10.0, 20.0])
+    assert (_determine_nbins(cell_lengths, 8) == [2, 2, 4]).all()
+    assert (_determine_nbins(cell_lengths, 15) == [2, 2, 4]).all()
+
+
+def test_determine_nbins_ortho2():
+    cell_lengths = np.array([10.0, 10.0, 20.0])
+    assert (_determine_nbins(cell_lengths, 8) == [2, 2, 3]).all()
+    assert (_determine_nbins(cell_lengths, 16) == [2, 2, 4]).all()
+
+
+def test_determine_nbins_cubic():
+    cell_lengths = np.array([10.0, 10.0, 10.0])
+    assert (_determine_nbins(cell_lengths, 8) == [2, 2, 2]).all()
+    assert (_determine_nbins(cell_lengths, 27) == [3, 3, 3]).all()
+
+
 def test_assign_atoms_to_bins_simple():
     atpos = np.array([[0.0, 0.0, 0.0], [0.9, 0.1, 0.4], [1.5, 0.1, 4.1]])
     cell_lengths = np.array([2.0, 2.0, 2.0])
-    rcut = 0.95
-    bins, nbins = _assign_atoms_to_bins(atpos, cell_lengths, rcut)
-    assert nbins.shape == (3,)
-    assert nbins.dtype == int
-    assert (nbins == 2).all()
+    nbins = np.array([2, 2, 2])
+    bins = _assign_atoms_to_bins(atpos, cell_lengths, nbins)
     assert len(bins) == 2
     for idx in bins:
         assert len(idx) == 3
@@ -77,13 +93,10 @@ def test_assign_atoms_to_bins_simple():
 def test_assign_atoms_to_bins_random():
     rng = np.random.default_rng(42)
     natom = 500
-    rcut = 0.99
     atpos = rng.uniform(-50, 50, (natom, 3))
     cell_lengths = np.array([5.0, 3.0, 2.0])
-    bins, nbins = _assign_atoms_to_bins(atpos, cell_lengths, rcut)
-    assert nbins.shape == (3,)
-    assert nbins.dtype == int
-    assert (nbins == [5, 3, 2]).all()
+    nbins = np.array([5, 3, 2])
+    bins = _assign_atoms_to_bins(atpos, cell_lengths, nbins)
     for idx, atoms in bins.items():
         assert len(idx) == 3
         assert isinstance(idx[0], int)
@@ -269,14 +282,19 @@ def test_create_parts_nearby_random():
     assert dists_a == pytest.approx(dists_b)
 
 
-@pytest.mark.parametrize("nbuild_class", [NBuildSimple, NBuildCellLists])
+@pytest.mark.parametrize(
+    "nbuild",
+    [
+        NBuildSimple(rmax=0.4, nlist_reuse=2),
+        NBuildCellLists(rmax=0.4, nlist_reuse=2, nbin_approx=8),
+    ],
+)
 @pytest.mark.parametrize("cell_length", [1.0, 2.0, 3.0])
-def test_build_cubic_simple(nbuild_class, cell_length):
+def test_build_cubic_simple(nbuild, cell_length):
     # Build
     atpos = np.array([[0.1, 0.1, 0.1], [-0.1, -0.1, -0.1]])
     atpos[1] += cell_length
     cell_lengths = [cell_length] * 3
-    nbuild = nbuild_class(rmax=0.4, nlist_reuse=2)
     nbuild.update(atpos, cell_lengths)
     assert len(nbuild.nlist) == 1
     i, j, delta, _, dist, _, _ = nbuild.nlist[0]
@@ -304,11 +322,10 @@ def test_build_cubic_simple(nbuild_class, cell_length):
     assert dist == pytest.approx(np.sqrt(48) / 10)
 
 
-@pytest.mark.parametrize("nbuild_class", [NBuildSimple, NBuildCellLists])
-def test_build_empty(nbuild_class):
+@pytest.mark.parametrize("nbuild", [NBuildSimple(0.4), NBuildCellLists(0.4, nbin_approx=8)])
+def test_build_empty(nbuild):
     atpos = np.array([[0.1, 0.1, 0.1], [2.1, 2.1, 2.1]])
     cell_lenghts = 5.0
-    nbuild = nbuild_class(0.4)
     nbuild.update(atpos, cell_lenghts)
     assert len(nbuild.nlist) == 0
 
@@ -325,7 +342,7 @@ def test_build_ortho_random(cell_lengths):
     # Compute with simple algorithm and with linked cell
     nbuild1 = NBuildSimple(rmax)
     nbuild1.update(atpos, cell_lengths)
-    nbuild2 = NBuildCellLists(rmax)
+    nbuild2 = NBuildCellLists(rmax, nbin_approx=8)
     nbuild2.update(atpos, cell_lengths)
 
     # Compare the results
@@ -353,14 +370,19 @@ def test_build_ortho_random(cell_lengths):
     assert nbuild1.nlist["dist"] == pytest.approx(nbuild2.nlist["dist"])
 
 
-@pytest.mark.parametrize("nbuild_class", [NBuildSimple, NBuildCellLists])
-def test_nlist_reuse(nbuild_class):
+@pytest.mark.parametrize(
+    "nbuild",
+    [
+        NBuildSimple(rmax=9.0, nlist_reuse=3),
+        NBuildCellLists(rmax=9.0, nlist_reuse=3, nbin_approx=8),
+    ],
+)
+def test_nlist_reuse(nbuild):
     # Build a simple model for testing.
     cell_length = 20.0
     atpos = np.array([[0.0, 0.0, 0.0], [2.0, 0.0, 0.0]])
 
     # Define the force field.
-    nbuild = nbuild_class(rmax=9.0, nlist_reuse=3)
     nbuild.update(atpos, cell_length)
     assert len(nbuild.nlist) == 1
     assert nbuild.nlist_use_count == 3

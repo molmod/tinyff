@@ -218,13 +218,16 @@ class NBuildSimple(NBuild):
 
 @attrs.define
 class NBuildCellLists(NBuild):
+    nbin_approx: float = attrs.field()
+
     def _rebuild(self, atpos: ArrayLike, cell_lengths: ArrayLike):
         """Build a neighborlist with linked cell algorithm."""
         atpos = parse_atpos(atpos)
         cell_lengths = parse_cell_lengths(cell_lengths, self.rmax)
 
         # Group the atoms into bins
-        bins, nbins = _assign_atoms_to_bins(atpos, cell_lengths, self.rmax)
+        nbins = _determine_nbins(cell_lengths, self.nbin_approx)
+        bins = _assign_atoms_to_bins(atpos, cell_lengths, nbins)
 
         # Loop over pairs of nearby bins and collect parts for neighborlist.
         iatoms0_parts = []
@@ -258,9 +261,31 @@ class NBuildCellLists(NBuild):
         return cell_lengths
 
 
+def _determine_nbins(cell_lengths: NDArray[float], nbin_approx: float) -> NDArray[int]:
+    """Determine the number of bins, aiming for a given number of atoms per bin.
+
+    Parameters
+    ----------
+    cell_lengths
+        The lengths of a periodic orthorombic box.
+    nbin_approx
+        The target number of bins, may be a floating point number.
+        For example, the number of atoms divided by 100.
+
+    Returns
+    -------
+    nbins
+        An array with three values: the number of bins along each Cartesian axis.
+        The number of bins is at least two.
+    """
+    nbin_volume = np.prod(cell_lengths) / nbin_approx
+    bin_width = nbin_volume ** (1 / 3)
+    return np.floor(np.clip(cell_lengths / bin_width, 2, np.inf)).astype(int)
+
+
 def _assign_atoms_to_bins(
-    atpos: NDArray[float], cell_lengths: NDArray[float], rmax: float
-) -> tuple[dict[tuple[int, int, int], NDArray[int]], NDArray[int]]:
+    atpos: NDArray[float], cell_lengths: NDArray[float], nbins: NDArray[int]
+) -> dict[tuple[int, int, int], NDArray[int]]:
     """Create arrays of atom indexes for each bin in the cell.
 
     Parameters
@@ -270,29 +295,24 @@ def _assign_atoms_to_bins(
         Array shape = (natom, 3).
     cell_lengths
         The lengths of a periodic orthorombic box.
-    rmax
-        The maximum radioius, i.e. the cut-off radius for the neighborlist.
-        Note that the corresponding sphere must fit in the simulation cell.
+    nbins
+        The number of bins along each cell axis.
 
     Returns
     -------
     bins
         A dictionary whose keys are 3-tuples of integer bin indexes and
         whose values are arrays of atom indexes in the corresponding bins.
-    nbins
-        An array with three values: the number of bins along each Cartesian axis.
     """
-    nbins = np.floor(cell_lengths / rmax).astype(int)
     if (nbins < 2).any():
         raise ValueError("The cutoff radius is too large for the given cell lengths.")
     idxs = np.floor(atpos / (cell_lengths / nbins)).astype(int) % nbins
     flat_idxs = (idxs[:, 0] * nbins[1] + idxs[:, 1]) * nbins[2] + idxs[:, 2]
     _flat_unique, firsts, inverse = np.unique(flat_idxs, return_index=True, return_inverse=True)
-    bins = {
+    return {
         tuple(int(idx) for idx in idxs[first]): (inverse == i).nonzero()[0]
         for i, first in enumerate(firsts)
     }
-    return bins, nbins
 
 
 def _create_parts_self(

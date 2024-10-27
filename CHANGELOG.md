@@ -37,6 +37,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   all relevant functions and classes can be imported from the top-level `tinyff` package.
 - Module reorganization: all pairwise potentials are now defined in `tinyff.pairwise`,
   instead of `tinyff.forcefield`.
+- The `NBuildCellLists` has an additional mandatory keyword argument: `nbin_approx`,
+  which is the approximate number of binds in which the cell is split up.
+  The recommended setting is `natom / 100`.
+
 
 ### Removed
 

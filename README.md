@@ -97,12 +97,10 @@ into the `ForceField` constructor:
     from tinyff import NBuildCellLists
 
     # Construct your force field object as follows:
-    ff = ForceField([lj], nbuild=NBuildCellLists(rcut))
+    ff = ForceField([lj], nbuild=NBuildCellLists(rcut, nbin_approx=natom / 100))
     ```
 
-    Note that the current cell lists implementation is not very efficient (yet),
-    so we currently do not recommended using it.
-    (For about 1500 atoms, it becomes more efficient than the simple implementation.)
+    For about 430 atoms, this becomes more efficient than the simple neighborlist build.
 
 - [Verlet lists](https://en.wikipedia.org/wiki/Verlet_list) (cut-off radius + buffer):
 

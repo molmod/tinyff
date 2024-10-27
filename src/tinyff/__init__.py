@@ -21,7 +21,7 @@
 from .atomsmithy import build_bcc_lattice, build_cubic_lattice, build_fcc_lattice, build_random_cell
 from .forcefield import ForceField
 from .neighborlist import NBuildCellLists, NBuildSimple
-from .pairwise import CutOffWrapper, LennardJones
+from .pairwise import CutOffWrapper, LennardJones, PairwiseTerm
 from .trajectory import NPYWriter, PDBWriter
 
 __all__ = (
@@ -32,8 +32,9 @@ __all__ = (
     "ForceField",
     "NBuildSimple",
     "NBuildCellLists",
-    "LennardJones",
     "CutOffWrapper",
+    "LennardJones",
+    "PairwiseTerm",
     "NPYWriter",
     "PDBWriter",
 )
