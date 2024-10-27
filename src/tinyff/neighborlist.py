@@ -26,6 +26,7 @@ from .utils import parse_atpos, parse_cell_lengths
 
 __all__ = ("NLIST_DTYPE", "NBuildSimple", "NBuildCellLists")
 
+
 NLIST_DTYPE = [
     # First atoms.
     ("iatom0", int),
@@ -189,7 +190,9 @@ def _apply_mic(deltas: NDArray[float], cell_lengths: NDArray[float]):
     deltas /= cell_lengths
     deltas -= np.round(deltas)
     deltas *= cell_lengths
-    return np.linalg.norm(deltas, axis=1)
+    dist = np.einsum("ij,ij->i", deltas, deltas)
+    np.sqrt(dist, out=dist)
+    return dist
 
 
 @attrs.define
