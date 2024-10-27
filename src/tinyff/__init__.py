@@ -18,6 +18,7 @@
 # --
 """The TinyFF package."""
 
+from .analysis import compute_acf, compute_rdf
 from .atomsmithy import build_bcc_lattice, build_cubic_lattice, build_fcc_lattice, build_random_cell
 from .forcefield import ForceField
 from .neighborlist import NBuildCellLists, NBuildSimple
@@ -25,6 +26,8 @@ from .pairwise import CutOffWrapper, LennardJones, PairwiseTerm
 from .trajectory import NPYWriter, PDBWriter
 
 __all__ = (
+    "compute_rdf",
+    "compute_acf",
     "build_bcc_lattice",
     "build_fcc_lattice",
     "build_cubic_lattice",

@@ -39,18 +39,18 @@ pip install tinyff
 
 TinyFF is a Python package with the following modules:
 
+- `tinyff.analysis`: helper functions to compute a radial distribution function
+  and an autocorrelation function.
 - `tinyff.atomsmithy`: functions for creating initial atomic positions.
 - `tinyff.forcefield`: implements a general force field interface: energy, atomic forces and pressure
 - `tinyff.pairwise`: pairwise potentials to be used in force fields.
 - `tinyff.neighborlist`: used by the `forcefield` module to compute pairwise interactions
-   with a real-space cut-off.
+  with a real-space cut-off.
 - `tinyff.trajectory`: tools for writing molecular dynamics trajectories to file(s).
 - `tinyff.utils`: utility functions used in `tinyff`.
 
 Most relevant functions and classes can be imported directly from the top-level `tinyff` package.
-
-None of these modules implement any molecular dynamics integrators,
-nor any post-processing of molecular dynamics trajectories.
+None of these modules implement any molecular dynamics integrators.
 This is the part that you are expected to write.
 
 

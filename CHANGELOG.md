@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   such as in Monte Carlo simulations.
 - The `ForceField` object is extended with `try_move` and `accept_move`
   to support (relatively) efficient Monte Carlo algorithms with TinyFF.
+- Basic analysis routines for radial distribution functions and autocorrelation functions.
 
 
 ### Changed
