@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+The main changes of this release include support for Monte Carlo algorithms and performance improvements.
+
 ### Added
 
 - The `ForceField` object has a new method `compute` that can selectively compute

@@ -35,6 +35,14 @@ you can install TinyFF with:
 pip install tinyff
 ```
 
+## Migration from older versions
+
+Code written for TinyFF 1 can be easily updated to work with TinyFF 2.
+All required changes are documented in the [Migration Guide](migration.md).
+
+A complete list of changes is documented in [CHANGELOG.md](CHANGELOG.md).
+
+
 ## Features
 
 TinyFF is a Python package with the following modules:
@@ -244,8 +252,3 @@ atpos[iatom] += delta
 energy1, = ff.compute(atpos, cell_length)
 assert abs(energy_change - (energy1 - energy0)) < 1e-10
 ```
-
-
-## Change log
-
-The history of changes can be found in [CHANGELOG.md](CHANGELOG.md).
