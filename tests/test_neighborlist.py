@@ -59,20 +59,25 @@ def test_mic_random():
 
 def test_determine_nbins_ortho1():
     cell_lengths = np.array([5.0, 10.0, 20.0])
-    assert (_determine_nbins(cell_lengths, 8) == [2, 2, 4]).all()
-    assert (_determine_nbins(cell_lengths, 15) == [2, 2, 4]).all()
+    assert (_determine_nbins(cell_lengths, 2.0, 8) == [2, 2, 4]).all()
+    assert (_determine_nbins(cell_lengths, 2.0, 15) == [2, 2, 4]).all()
 
 
 def test_determine_nbins_ortho2():
     cell_lengths = np.array([10.0, 10.0, 20.0])
-    assert (_determine_nbins(cell_lengths, 8) == [2, 2, 3]).all()
-    assert (_determine_nbins(cell_lengths, 16) == [2, 2, 4]).all()
+    assert (_determine_nbins(cell_lengths, 2.0, 8) == [2, 2, 3]).all()
+    assert (_determine_nbins(cell_lengths, 2.0, 16) == [2, 2, 4]).all()
 
 
 def test_determine_nbins_cubic():
     cell_lengths = np.array([10.0, 10.0, 10.0])
-    assert (_determine_nbins(cell_lengths, 8) == [2, 2, 2]).all()
-    assert (_determine_nbins(cell_lengths, 27) == [3, 3, 3]).all()
+    assert (_determine_nbins(cell_lengths, 2.0, 8) == [2, 2, 2]).all()
+    assert (_determine_nbins(cell_lengths, 2.0, 27) == [3, 3, 3]).all()
+
+
+def test_determine_nbins_cubic_rmax():
+    cell_lengths = np.array([100.0, 100.0, 100.0])
+    assert (_determine_nbins(cell_lengths, 20.0, 1000) == [5, 5, 5]).all()
 
 
 def test_assign_atoms_to_bins_simple():

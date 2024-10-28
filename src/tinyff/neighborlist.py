@@ -226,7 +226,7 @@ class NBuildCellLists(NBuild):
         cell_lengths = parse_cell_lengths(cell_lengths, self.rmax)
 
         # Group the atoms into bins
-        nbins = _determine_nbins(cell_lengths, self.nbin_approx)
+        nbins = _determine_nbins(cell_lengths, self.rmax, self.nbin_approx)
         bins = _assign_atoms_to_bins(atpos, cell_lengths, nbins)
 
         # Loop over pairs of nearby bins and collect parts for neighborlist.
@@ -261,13 +261,17 @@ class NBuildCellLists(NBuild):
         return cell_lengths
 
 
-def _determine_nbins(cell_lengths: NDArray[float], nbin_approx: float) -> NDArray[int]:
+def _determine_nbins(cell_lengths: NDArray[float], rmax: float, nbin_approx: float) -> NDArray[int]:
     """Determine the number of bins, aiming for a given number of atoms per bin.
 
     Parameters
     ----------
     cell_lengths
         The lengths of a periodic orthorombic box.
+    rmax
+        The maximum distance between atoms in the neighborlist.
+        It is guaranteed that the opposite faces of a bin are separated
+        by a distance not less than rmax.
     nbin_approx
         The target number of bins, may be a floating point number.
         For example, the number of atoms divided by 100.
@@ -279,7 +283,7 @@ def _determine_nbins(cell_lengths: NDArray[float], nbin_approx: float) -> NDArra
         The number of bins is at least two.
     """
     nbin_volume = np.prod(cell_lengths) / nbin_approx
-    bin_width = nbin_volume ** (1 / 3)
+    bin_width = max(nbin_volume ** (1 / 3), rmax)
     return np.floor(np.clip(cell_lengths / bin_width, 2, np.inf)).astype(int)
 
 
