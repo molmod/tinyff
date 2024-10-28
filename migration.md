@@ -5,7 +5,7 @@ Minor versions upgrades should maintain backward compatibility.
 Only when the major version changes, you may need to make changes to code using TinyFF
 
 
-## Upgrading from TinyFF 1.x to 2.x
+## Upgrading from TinyFF 1 to 2
 
 The required changes are relatively minor:
 
@@ -59,7 +59,6 @@ The required changes are relatively minor:
 - The pair potentials have undergone a similar change.
   If you want to calculate the derivative, you need to ask for it explicitly.
   By default, only the energy is computed.
-  (They are now all derived from `PairwiseTerm` instead of `PairPotential`)
   For example, change from:
 
     ```python

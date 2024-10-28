@@ -40,7 +40,7 @@ pip install tinyff
 Code written for TinyFF 1 can be easily updated to work with TinyFF 2.
 All required changes are documented in the [Migration Guide](migration.md).
 
-A complete list of changes is documented in [CHANGELOG.md](CHANGELOG.md).
+A complete list of changes can be found in [CHANGELOG.md](CHANGELOG.md).
 
 
 ## Features
