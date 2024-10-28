@@ -39,9 +39,9 @@ def test_pairwise_force_field_two(nbuild):
     ff = ForceField([lj], nbuild=nbuild)
 
     # Compute and check against manual result
-    energy, forces, frc_press = ff.compute(atpos, cell_length, do_forces=True, do_press=True)
+    energy, forces, frc_press = ff.compute(atpos, cell_length, nderiv=1)
     d = np.linalg.norm(atpos[0] - atpos[1])
-    e, g = lj.compute(d, do_gdist=True)
+    e, g = lj.compute(d, nderiv=1)
     assert energy == pytest.approx(e)
     assert forces == pytest.approx(np.array([[g, 0.0, 0.0], [-g, 0.0, 0.0]]))
     assert frc_press == pytest.approx(-g * d / (3 * cell_length**3))
@@ -59,7 +59,7 @@ def test_pairwise_force_field_three(nbuild):
     ff = ForceField([lj], nbuild=nbuild)
 
     # Compute the energy, the forces and the force contribution pressure.
-    energy1, forces1, frc_press1 = ff.compute(atpos, cell_length, do_forces=True, do_press=True)
+    energy1, forces1, frc_press1 = ff.compute(atpos, cell_length, nderiv=1)
 
     # Compute the energy manually and compare.
     dists = [
@@ -115,7 +115,7 @@ def test_pairwise_force_field_fifteen(nbuild):
     ff = ForceField([lj], nbuild=nbuild)
 
     # Compute the energy, the forces and the force contribution to the pressure.
-    energy, forces1, frc_press1 = ff.compute(atpos, cell_length, do_forces=True, do_press=True)
+    energy, forces1, frc_press1 = ff.compute(atpos, cell_length, nderiv=1)
     assert energy < 0
 
     # Test forces with numdifftool
@@ -148,9 +148,9 @@ def test_superposition(nbuild_class, kwargs):
     ff_pp = ForceField([cr], nbuild=nbuild_class(rcut, **kwargs))
     ff_su = ForceField([lj, cr], nbuild=nbuild_class(rcut, **kwargs))
 
-    ener_lj, forces_lj, press_lj = ff_lj.compute(atpos, cell_length, do_forces=True, do_press=True)
-    ener_pp, forces_pp, press_pp = ff_pp.compute(atpos, cell_length, do_forces=True, do_press=True)
-    ener_su, forces_su, press_su = ff_su.compute(atpos, cell_length, do_forces=True, do_press=True)
+    ener_lj, forces_lj, press_lj = ff_lj.compute(atpos, cell_length, nderiv=1)
+    ener_pp, forces_pp, press_pp = ff_pp.compute(atpos, cell_length, nderiv=1)
+    ener_su, forces_su, press_su = ff_su.compute(atpos, cell_length, nderiv=1)
     assert ener_lj + ener_pp == pytest.approx(ener_su)
     assert forces_lj + forces_pp == pytest.approx(forces_su)
     assert press_lj + press_pp == pytest.approx(press_su)

@@ -79,12 +79,11 @@ atpos = np.array([[0.0, 0.0, 1.0], [1.0, 2.0, 0.0]])
 cell_length = 20.0
 
 # Compute a selection of results with ff.compute.
-#   The ff.compute method has `do_*` arguments to compute only some results:
-#   - `do_energy` (default True)
-#   - `do_forces` (default False)
-#   - `do_press` (default False).
+#   The ff.compute method has an `nderiv` arguments to compute only some results:
+#   - `nderiv=0` (default): compute only the energy
+#   - `nderiv=1`: compute the energy, forces and force contribution to the pressure.
 #   Requested results are put in a list, even in only one result is requested.
-potential_energy, forces = ff.compute(atpos, cell_length, do_forces=True)
+potential_energy, forces, press = ff.compute(atpos, cell_length, nderiv=1)
 ```
 
 This basic recipe can be extended by passing additional options

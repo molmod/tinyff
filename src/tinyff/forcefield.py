@@ -47,15 +47,7 @@ class ForceField:
     nbuild: NBuild = attrs.field(validator=attrs.validators.instance_of(NBuild), kw_only=True)
     """Algorithm to build the neigborlist."""
 
-    def compute(
-        self,
-        atpos: NDArray,
-        cell_lengths: ArrayLike | float,
-        *,
-        do_energy: bool = True,
-        do_forces: bool = False,
-        do_press: bool = False,
-    ):
+    def compute(self, atpos: NDArray, cell_lengths: ArrayLike | float, nderiv: int = 0):
         """Compute microscopic properties related to the potential energy.
 
         Parameters
@@ -66,12 +58,9 @@ class ForceField:
         cell_length
             The length of the edge of the cubic simulation cell,
             or an array of lengths of three cell vectors.
-        do_energy
-            if True, the energy is returned.
-        do_forces
-            if True, the atomic forces are returned.
-        do_press
-            if True, the force contribution to the pressure is returned.
+        nderiv
+            The order of derivatives to compute, either 0 (energy)
+            or 1 (energy, forces and pressure).
 
         Returns
         -------
@@ -84,23 +73,20 @@ class ForceField:
 
         # Compute all pairwise quantities, if needed with derivatives.
         for pairwise_term in self.pairwise_terms:
-            pairwise_term.compute_nlist(nlist, do_energy, do_forces | do_press)
+            pairwise_term.compute_nlist(nlist, nderiv)
 
         # Compute the totals
         results = []
-        if do_energy:
-            energy = nlist["energy"].sum()
-            results.append(energy)
-        if do_forces or do_press:
+        energy = nlist["energy"].sum()
+        results.append(energy)
+        if nderiv >= 1:
             nlist["gdelta"] = (nlist["gdist"] / nlist["dist"]).reshape(-1, 1) * nlist["delta"]
-            if do_forces:
-                atfrc = np.zeros(atpos.shape, dtype=float)
-                np.subtract.at(atfrc, nlist["iatom1"], nlist["gdelta"])
-                np.add.at(atfrc, nlist["iatom0"], nlist["gdelta"])
-                results.append(atfrc)
-            if do_press:
-                frc_press = -np.dot(nlist["gdist"], nlist["dist"]) / (3 * cell_lengths.prod())
-                results.append(frc_press)
+            atfrc = np.zeros(atpos.shape, dtype=float)
+            np.subtract.at(atfrc, nlist["iatom1"], nlist["gdelta"])
+            np.add.at(atfrc, nlist["iatom0"], nlist["gdelta"])
+            results.append(atfrc)
+            frc_press = -np.dot(nlist["gdist"], nlist["dist"]) / (3 * cell_lengths.prod())
+            results.append(frc_press)
 
         return results
 

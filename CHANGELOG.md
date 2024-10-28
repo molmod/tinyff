@@ -10,9 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - The `ForceField` object has a new method `compute` that can selectively compute
-  the energy, the forces and/or the force-contribution to the pressure.
-  This improves the efficiency in applications where not all quantities are of interest,
-  such as in Monte Carlo simulations.
+  the energy only or the energy, forces and the force-contribution to the pressure.
+  This improves the efficiency in applications where derivatives are of interest,
+  e.g. in Monte Carlo simulations.
 - The `ForceField` object is extended with `try_move` and `accept_move`
   to support (relatively) efficient Monte Carlo algorithms with TinyFF.
 - Basic analysis routines for radial distribution functions and autocorrelation functions.
@@ -24,12 +24,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The `ForceField` class requires the `NBuild` instance to be provided as a keyword argument.
   For example: `ForceField([LennardJones()], nbuild=NBuildSimple)`.
 - The `ForceField.__call__` method is replaced by `ForceField.compute`,
-  which has a different API with new `do_*` arguments.
+  which has a different API with a new `nderiv=0` arguments.
   By default, only the energy is computed.
-  You must request forces and pressure explicitly.
-  The function always returns a list of results, even if there is only one.
+  You must request forces and pressure explicitly by setting `nderiv=1`.
+  The function always returns a list of results, even if `nderiv=0`.
 - The `PairwiseTerm.compute` (previously `PairwisePotential.compute`) has a new API:
-  it takes `do_*` arguments to decide what is computed (energy and or derivative).
+  it takes an `nderiv` arguments to decide what is computed
+  (energy or energy and derivative).
   It returns a list of requested results.
   By default, only the energy is computed.
 - The `ForceTerm.__call__` method has been replaced by `PairwiseTerm.compute_nlist`.

@@ -28,7 +28,7 @@ from tinyff.pairwise import CheapRepulsion, CutOffWrapper, LennardJones
 def test_lennard_jones_derivative():
     lj = LennardJones(2.5, 0.5)
     dist = np.linspace(0.4, 3.0, 50)
-    gdist1 = lj.compute(dist, do_energy=False, do_gdist=True)[0]
+    gdist1 = lj.compute(dist, nderiv=1)[1]
     gdist2 = nd.Derivative(lambda x: lj.compute(x)[0])(dist)
     assert gdist1 == pytest.approx(gdist2)
 
@@ -36,21 +36,21 @@ def test_lennard_jones_derivative():
 def test_lennard_jones_cut_derivative():
     lj = CutOffWrapper(LennardJones(2.5, 0.5), 3.5)
     dist = np.linspace(0.4, 5.0, 50)
-    gdist1 = lj.compute(dist, do_energy=False, do_gdist=True)[0]
+    gdist1 = lj.compute(dist, nderiv=1)[1]
     gdist2 = nd.Derivative(lambda x: lj.compute(x)[0])(dist)
     assert gdist1 == pytest.approx(gdist2)
 
 
 def test_lennard_jones_cut_zero_array():
     lj = CutOffWrapper(LennardJones(2.5, 0.5), 3.5)
-    e, g = lj.compute([5.0, 3.6], do_gdist=True)
+    e, g = lj.compute([5.0, 3.6], nderiv=1)
     assert (e == 0.0).all()
     assert (g == 0.0).all()
 
 
 def test_lennard_jones_cut_zero_scalar():
     lj = CutOffWrapper(LennardJones(2.5, 0.5), 3.5)
-    e, g = lj.compute(5.0, do_gdist=True)
+    e, g = lj.compute(5.0, nderiv=1)
     assert e == 0.0
     assert g == 0.0
 
@@ -58,15 +58,21 @@ def test_lennard_jones_cut_zero_scalar():
 def test_cheap_repulsion_derivative():
     cr = CheapRepulsion(2.5)
     dist = np.linspace(0.4, 3.0, 50)
-    gdist1 = cr.compute(dist, do_energy=False, do_gdist=True)[0]
+    gdist1 = cr.compute(dist, nderiv=1)[1]
     gdist2 = nd.Derivative(lambda x: cr.compute(x)[0])(dist)
     assert gdist1 == pytest.approx(gdist2)
 
 
 def test_cheap_repulsion_cutoff():
-    cr = CheapRepulsion(2.5)
+    rcut = 2.5
+    cr = CheapRepulsion(rcut)
     eps = 1e-13
-    assert abs(cr.compute(2.5 - 0.1)[0]) > eps
-    assert abs(cr.compute(2.5 - 0.1, do_energy=False, do_gdist=True)[0]) > eps
-    assert abs(cr.compute(2.5 - eps)[0]) < eps
-    assert abs(cr.compute(2.5 - eps, do_energy=False, do_gdist=True)[0]) < eps
+    e, g = cr.compute(rcut - 0.1, nderiv=1)
+    assert abs(e) > eps
+    assert abs(g) > eps
+    e, g = cr.compute(rcut - eps, nderiv=1)
+    assert abs(e) < eps
+    assert abs(g) < eps
+    e, g = cr.compute(rcut + 0.2, nderiv=1)
+    assert e == 0.0
+    assert g == 0.0

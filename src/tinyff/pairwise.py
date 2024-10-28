@@ -29,23 +29,33 @@ __all__ = ("PairwiseTerm", "LennardJones", "CutOffWrapper", "CheapRepulsion")
 
 @attrs.define
 class PairwiseTerm:
-    def compute_nlist(
-        self, nlist: NDArray[NLIST_DTYPE], do_energy: bool = True, do_gdist: bool = False
-    ):
-        """Compute energies and derivatives and add them to the neighborlist."""
-        results = self.compute(nlist["dist"], do_energy, do_gdist)
-        if do_energy:
-            nlist["energy"] += results.pop(0)
-        if do_gdist:
+    def compute_nlist(self, nlist: NDArray[NLIST_DTYPE], nderiv: int = 0):
+        """Compute energies and derivatives and add them to the neighborlist.
+
+        Parameters
+        ----------
+        nlist
+            The neighborlist to which energies (and derivatives) must be added.
+        nderiv
+            The order of derivatives to compute, either 0 (energy)
+            or 1 (energy and its derivative).
+        """
+        results = self.compute(nlist["dist"], nderiv)
+        nlist["energy"] += results.pop(0)
+        if nderiv >= 1:
             nlist["gdist"] += results.pop(0)
 
-    def compute(
-        self,
-        dist: NDArray[float],
-        do_energy: bool = True,
-        do_gdist: bool = False,
-    ) -> list[NDArray]:
-        """Compute pair potential energy and its derivative towards distance."""
+    def compute(self, dist: NDArray[float], nderiv: int = 0) -> list[NDArray]:
+        """Compute pair potential energy and its derivative towards distance.
+
+        Parameters
+        ----------
+        dist
+            The interatomic distances.
+        nderiv
+            The order of derivatives to compute, either 0 (energy)
+            or 1 (energy and its derivative).
+        """
         raise NotImplementedError  # pragma: nocover
 
 
@@ -54,23 +64,17 @@ class LennardJones(PairwiseTerm):
     epsilon: float = attrs.field(default=1.0, converter=float)
     sigma: float = attrs.field(default=1.0, converter=float)
 
-    def compute(
-        self,
-        dist: NDArray[float],
-        do_energy: bool = True,
-        do_gdist: bool = False,
-    ) -> list[NDArray]:
+    def compute(self, dist: NDArray[float], nderiv: int = 0) -> list[NDArray]:
         """Compute pair potential energy and its derivative towards distance."""
         results = []
         dist = np.asarray(dist, dtype=float)
         x = self.sigma / dist
         x3 = x * x * x
         x6 = x3 * x3
-        if do_energy:
-            energy = (x6 - 1) * x6
-            energy *= 4 * self.epsilon
-            results.append(energy)
-        if do_gdist:
+        energy = (x6 - 1) * x6
+        energy *= 4 * self.epsilon
+        results.append(energy)
+        if nderiv >= 1:
             gdist = (x6 - 0.5) * x6 / dist
             gdist *= -48 * self.epsilon
             results.append(gdist)
@@ -86,14 +90,9 @@ class CutOffWrapper(PairwiseTerm):
 
     def __attrs_post_init__(self):
         """Post initialization changes."""
-        self.ecut, self.gcut = self.original.compute(self.rcut, do_gdist=True)
+        self.ecut, self.gcut = self.original.compute(self.rcut, nderiv=1)
 
-    def compute(
-        self,
-        dist: NDArray[float],
-        do_energy: bool = True,
-        do_gdist: bool = False,
-    ) -> list[NDArray]:
+    def compute(self, dist: NDArray[float], nderiv: int = 0) -> list[NDArray]:
         """Compute pair potential energy and its derivative towards distance."""
         dist = np.asarray(dist, dtype=float)
         mask = dist < self.rcut
@@ -101,28 +100,25 @@ class CutOffWrapper(PairwiseTerm):
         if mask.ndim == 0:
             # Deal with non-array case
             if mask:
-                orig_results = self.original.compute(dist, do_energy, do_gdist)
-                if do_energy:
-                    energy = orig_results.pop(0)
-                    energy -= self.ecut + self.gcut * (dist - self.rcut)
-                    results.append(energy)
-                if do_gdist:
+                orig_results = self.original.compute(dist, nderiv)
+                energy = orig_results.pop(0)
+                energy -= self.ecut + self.gcut * (dist - self.rcut)
+                results.append(energy)
+                if nderiv >= 1:
                     gdist = orig_results.pop(0)
                     gdist -= self.gcut
                     results.append(gdist)
             else:
-                if do_energy:
-                    results.append(0.0)
-                if do_gdist:
+                results.append(0.0)
+                if nderiv >= 1:
                     results.append(0.0)
         else:
-            orig_results = self.original.compute(dist, do_energy, do_gdist)
-            if do_energy:
-                energy = orig_results.pop(0)
-                energy -= self.ecut + self.gcut * (dist - self.rcut)
-                energy *= mask
-                results.append(energy)
-            if do_gdist:
+            orig_results = self.original.compute(dist, nderiv)
+            energy = orig_results.pop(0)
+            energy -= self.ecut + self.gcut * (dist - self.rcut)
+            energy *= mask
+            results.append(energy)
+            if nderiv >= 1:
                 gdist = orig_results.pop(0)
                 gdist -= self.gcut
                 gdist *= mask
@@ -136,21 +132,15 @@ class CheapRepulsion(PairwiseTerm):
 
     rcut: float = attrs.field(converter=float, validator=attrs.validators.gt(0))
 
-    def compute(
-        self,
-        dist: NDArray[float],
-        do_energy: bool = True,
-        do_gdist: bool = False,
-    ) -> list[NDArray]:
+    def compute(self, dist: NDArray[float], nderiv: int = 0) -> list[NDArray]:
         """Compute pair potential energy and its derivative towards distance."""
         dist = np.asarray(dist, dtype=float)
         x = dist / self.rcut
         results = []
         common = (x - 1) * (x < 1)
-        if do_energy:
-            energy = common * common
-            results.append(energy)
-        if do_gdist:
+        energy = common * common
+        results.append(energy)
+        if nderiv >= 1:
             gdist = (2 / self.rcut) * common
             results.append(gdist)
         return results

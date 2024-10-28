@@ -102,7 +102,7 @@ def build_random_cell(
 
     def costgrad(atpos_raveled):
         atpos = atpos_raveled.reshape(-1, 3)
-        energy, force = ff.compute(atpos, cell_length, do_forces=True)
+        energy, force, _ = ff.compute(atpos, cell_length, nderiv=1)
         return energy, -force.ravel()
 
     # Optimize and return structure
