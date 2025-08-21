@@ -27,10 +27,10 @@ from .neighborlist import NBuild, NBuildSimple
 from .pairwise import CheapRepulsion
 
 __all__ = (
-    "build_general_cubic_lattice",
-    "build_cubic_lattice",
     "build_bcc_lattice",
+    "build_cubic_lattice",
     "build_fcc_lattice",
+    "build_general_cubic_lattice",
     "build_random_cell",
 )
 

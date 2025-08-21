@@ -24,7 +24,7 @@ from numpy.typing import ArrayLike, NDArray
 
 from .utils import parse_atpos, parse_cell_lengths
 
-__all__ = ("NLIST_DTYPE", "NBuildSimple", "NBuildCellLists")
+__all__ = ("NLIST_DTYPE", "NBuildCellLists", "NBuildSimple")
 
 
 NLIST_DTYPE = [

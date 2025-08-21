@@ -36,14 +36,128 @@ from numpy.typing import ArrayLike, NDArray
 
 from .utils import parse_atpos, parse_cell_lengths
 
-__all__ = ("PDBWriter", "NPYWriter")
+__all__ = ("NPYWriter", "PDBWriter")
 
-SYMBOLS = """
-H He Li Be B C N O F Ne Na Mg Al Si P S Cl Ar K Ca Sc Ti V Cr Mn Fe Co Ni Cu Zn
-Ga Ge As Se Br Kr Rb Sr Y Zr Nb Mo Tc Ru Rh Pd Ag Cd In Sn Sb Te I Xe Cs Ba La
-Ce Pr Nd Pm Sm Eu Gd Tb Dy Ho Er Tm Yb Lu Hf Ta W Re Os Ir Pt Au Hg Tl Pb Bi Po
-At Rn Fr Ra Ac Th Pa U Np Pu Am Cm Bk Cf Es Fm Md No Lr Rf Db Sg Bh Hs Mt Ds Rg
-Cn Nh Fl Mc Lv Ts Og""".split()
+SYMBOLS = [
+    "H",
+    "He",
+    "Li",
+    "Be",
+    "B",
+    "C",
+    "N",
+    "O",
+    "F",
+    "Ne",
+    "Na",
+    "Mg",
+    "Al",
+    "Si",
+    "P",
+    "S",
+    "Cl",
+    "Ar",
+    "K",
+    "Ca",
+    "Sc",
+    "Ti",
+    "V",
+    "Cr",
+    "Mn",
+    "Fe",
+    "Co",
+    "Ni",
+    "Cu",
+    "Zn",
+    "Ga",
+    "Ge",
+    "As",
+    "Se",
+    "Br",
+    "Kr",
+    "Rb",
+    "Sr",
+    "Y",
+    "Zr",
+    "Nb",
+    "Mo",
+    "Tc",
+    "Ru",
+    "Rh",
+    "Pd",
+    "Ag",
+    "Cd",
+    "In",
+    "Sn",
+    "Sb",
+    "Te",
+    "I",
+    "Xe",
+    "Cs",
+    "Ba",
+    "La",
+    "Ce",
+    "Pr",
+    "Nd",
+    "Pm",
+    "Sm",
+    "Eu",
+    "Gd",
+    "Tb",
+    "Dy",
+    "Ho",
+    "Er",
+    "Tm",
+    "Yb",
+    "Lu",
+    "Hf",
+    "Ta",
+    "W",
+    "Re",
+    "Os",
+    "Ir",
+    "Pt",
+    "Au",
+    "Hg",
+    "Tl",
+    "Pb",
+    "Bi",
+    "Po",
+    "At",
+    "Rn",
+    "Fr",
+    "Ra",
+    "Ac",
+    "Th",
+    "Pa",
+    "U",
+    "Np",
+    "Pu",
+    "Am",
+    "Cm",
+    "Bk",
+    "Cf",
+    "Es",
+    "Fm",
+    "Md",
+    "No",
+    "Lr",
+    "Rf",
+    "Db",
+    "Sg",
+    "Bh",
+    "Hs",
+    "Mt",
+    "Ds",
+    "Rg",
+    "Cn",
+    "Nh",
+    "Fl",
+    "Mc",
+    "Lv",
+    "Ts",
+    "Og",
+]
 
 
 @attrs.define
@@ -104,7 +218,7 @@ class PDBWriter:
         for i, (x, y, z) in enumerate(atpos * self.to_angstrom):
             symbol = SYMBOLS[self.atnums[i] - 1]
             print(
-                f"HETATM{i+1:5d} {symbol:2s}   ATM     1    {x:8.3f}{y:8.3f}{z:8.3f}"
+                f"HETATM{i + 1:5d} {symbol:2s}   ATM     1    {x:8.3f}{y:8.3f}{z:8.3f}"
                 f"  1.00  1.00          {symbol:2s}",
                 file=fh,
             )
@@ -164,8 +278,7 @@ class NPYWriter:
             # Check kwargs
             if set(self.fields) != set(kwargs):
                 raise TypeError(
-                    f"Received keys: {list(kwargs.keys())}. "
-                    f"Expected: {list(self.fields.keys())}"
+                    f"Received keys: {list(kwargs.keys())}. Expected: {list(self.fields.keys())}"
                 )
             for key, value in kwargs.items():
                 arvalue = np.asarray(value)

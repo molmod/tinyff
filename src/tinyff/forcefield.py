@@ -25,7 +25,7 @@ from numpy.typing import ArrayLike, NDArray
 from .neighborlist import NLIST_DTYPE, NBuild
 from .pairwise import PairwiseTerm
 
-__all__ = ("Move", "ForceField")
+__all__ = ("ForceField", "Move")
 
 
 @attrs.define

@@ -24,7 +24,7 @@ from numpy.typing import NDArray
 
 from .neighborlist import NLIST_DTYPE
 
-__all__ = ("PairwiseTerm", "LennardJones", "CutOffWrapper", "CheapRepulsion")
+__all__ = ("CheapRepulsion", "CutOffWrapper", "LennardJones", "PairwiseTerm")
 
 
 @attrs.define

@@ -24,7 +24,7 @@ from scipy.signal import correlate
 
 from .neighborlist import NBuild
 
-__all__ = ("compute_rdf", "compute_acf")
+__all__ = ("compute_acf", "compute_rdf")
 
 
 def compute_rdf(
