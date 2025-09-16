@@ -9,11 +9,11 @@ authors = [
 ]
 description = "Minimalistic Force Field evaluator."
 readme = "README.md"
+license = "GPL-3.0-or-later"
 requires-python = ">=3.11"
 classifiers = [
     "Environment :: Console",
     "Intended Audience :: Education",
-    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
     "Operating System :: POSIX",
     "Operating System :: MacOS",
     "Programming Language :: Python :: 3",
@@ -22,10 +22,10 @@ classifiers = [
 ]
 dependencies = [
     # Ensure changes to these dependencies are reflected in .github/requirements-old.txt
-    "attrs>=23.1.0",
-    "npy-append-array>=0.9.16",
-    "numpy>=1.23.5,<2.0.0",
-    "scipy>=1.11.1",
+    "attrs>=25.3.0",
+    "npy-append-array>=0.9.7",
+    "numpy>=2.3.1",
+    "scipy>=1.16.0",
 ]
 dynamic = ["version"]
 

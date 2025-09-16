@@ -5,3 +5,4 @@ src/tinyff/_version.py
 dist
 build
 tmp
+.envrc

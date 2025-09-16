@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.0] - 2025-09-17
+
+NumPy 2 is now required.
+
+### Changed
+
+- Bump NumPy and other dependencies.
 
 ## [2.0.0] - 2024-10-28
 
@@ -21,7 +28,6 @@ The main changes of this release include support for Monte Carlo algorithms and 
 - The `ForceField` object is extended with `try_move` and `accept_move`
   to support (relatively) efficient Monte Carlo algorithms with TinyFF.
 - Basic analysis routines for radial distribution functions and autocorrelation functions.
-
 
 ### Changed
 
@@ -105,6 +111,7 @@ Initial release. See README.md for a description of all features.
 
 
 [Unreleased]: https://github.com//molmod/tinyff
+[2.1.0]: https://github.com/molmod/tinyff/tag/v2.1.0
 [2.0.0]: https://github.com/molmod/tinyff/tag/v2.0.0
 [1.0.0]: https://github.com/molmod/tinyff/tag/v1.0.0
 [0.2.2]: https://github.com/molmod/tinyff/tag/v0.2.2
