@@ -49,6 +49,7 @@ def build_general_cubic_lattice(prim_frpos: ArrayLike, prim_length: float, nrep:
     nrep
         The number of times to repeat the primitive cell along each dimension.
         The primitive cell will thus be repeated `nrep**3` times.
+        The cell length of the resulting cubic cell will be `prim_length * nrep`.
 
     Returns
     -------
@@ -73,17 +74,17 @@ def build_general_cubic_lattice(prim_frpos: ArrayLike, prim_length: float, nrep:
 
 
 def build_cubic_lattice(prim_length: float, nrep: int):
-    """Build a simple cubic lattice with given cell length and number of repetitions."""
+    """Build a simple cubic lattice with given primitive cell length and number of repetitions."""
     return build_general_cubic_lattice([[0.0, 0.0, 0.0]], prim_length, nrep)
 
 
 def build_bcc_lattice(prim_length: float, nrep: int):
-    """Build a simple cubic lattice with given cell length and number of repetitions."""
+    """Build a simple cubic lattice with given primitive cell length and number of repetitions."""
     return build_general_cubic_lattice([[0.0, 0.0, 0.0], [0.5, 0.5, 0.5]], prim_length, nrep)
 
 
 def build_fcc_lattice(prim_length: float, nrep: int):
-    """Build a simple cubic lattice with given cell length and number of repetitions."""
+    """Build a simple cubic lattice with given primitive cell length and number of repetitions."""
     prim_frpos = [[0.0, 0.0, 0.0], [0.0, 0.5, 0.5], [0.5, 0.0, 0.5], [0.5, 0.5, 0.0]]
     return build_general_cubic_lattice(prim_frpos, prim_length, nrep)
 
