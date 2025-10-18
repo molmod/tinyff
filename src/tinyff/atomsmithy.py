@@ -18,6 +18,8 @@
 # --
 """Tools to build initial atomic positions."""
 
+import warnings
+
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 from scipy.optimize import minimize
@@ -45,14 +47,20 @@ def build_general_cubic_lattice(prim_frpos: ArrayLike, prim_length: float, nrep:
     prim_length
         The length of a primitive cubic cell edge.
     nrep
-        The number of times to repeat the primitive cell
-        (in three directions).
+        The number of times to repeat the primitive cell along each dimension.
+        The primitive cell will thus be repeated `nrep**3` times.
 
     Returns
     -------
     atpos
         Atomic positions, array with shape (natom, 3).
     """
+    if nrep > 30:
+        warnings.warn(
+            f"With nrep = {nrep}, the primitive cell is repeated nrep**3 = {nrep**3} times, "
+            "which potentially causes memory issues.",
+            stacklevel=3,
+        )
     prim_frpos = np.asarray(prim_frpos)
     if prim_frpos.ndim != 2:
         raise TypeError("prim_frpos must be a 2D array")
