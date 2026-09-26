@@ -2,30 +2,61 @@ name: pytest
 on:
   push:
     branches:
-    # Run tests for change on the main branch ...
-    - main
+      # Run tests for change on the main branch ...
+      - main
     tags-ignore:
-    # ... but not for tags (avoids duplicate work).
-    - '**'
+      # ... but not for tags (avoids duplicate work) ...
+      - '**'
+    paths:
+      # ... and only if relevant files have changed.
+      - src/**
+      - tests/**
+      - pyproject.toml
+      - .github/workflows/pytest.yaml
   pull_request:
-  # Run tests on pull requests
+    # Run tests on pull requests ...
+    paths:
+      # ... only if relevant files have changed.
+      - src/**
+      - tests/**
+      - pyproject.toml
+      - .github/workflows/pytest.yaml
 
 jobs:
   tests:
+    name: pytest (${{ matrix.python-version }}, ${{ matrix.resolution }})
+    permissions:
+      contents: read
     strategy:
       matrix:
-        python-version: ["3.11", "3.13"]
-    runs-on: "ubuntu-latest"
+        include:
+          # The oldest supported Python is combined with the oldest direct dependencies
+          # allowed by pyproject.toml, to verify that the declared lower bounds still hold.
+          - python-version: '3.11'
+            resolution: lowest-direct
+          # The newest supported Python is combined with the most recent dependencies.
+          - python-version: '3.14'
+            resolution: highest
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
+        timeout-minutes: 1
+        with:
+          persist-credentials: false
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        timeout-minutes: 1
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install oldest versions of supported dependencies
-        if: ${{ matrix.python-version == '3.11'}}
-        run: pip install -r .github/requirements-old.txt
-      - name: Install development version
-        run: pip install -e .[dev]
+      - name: Set up uv
+        timeout-minutes: 1
+        uses: astral-sh/setup-uv@v10.0.1
+        with:
+          enable-cache: true
+          cache-dependency-glob: pyproject.toml
+      - name: Install package with test dependencies
+        timeout-minutes: 3
+        run: uv pip install --system --resolution ${{ matrix.resolution }} -e .[dev]
       - name: Run pytest
+        timeout-minutes: 5
         run: pytest -vv

@@ -24,6 +24,7 @@ from numpy.typing import ArrayLike, NDArray
 
 from .neighborlist import NLIST_DTYPE, NBuild
 from .pairwise import PairwiseTerm
+from .utils import parse_atpos
 
 __all__ = ("ForceField", "Move")
 
@@ -41,13 +42,15 @@ class Move:
 
 @attrs.define
 class ForceField:
+    """A force field defined as a sum of pairwise terms, evaluated with a neighborlist."""
+
     pairwise_terms: list[PairwiseTerm] = attrs.field()
     """A list of contributions to the potential energy."""
 
     nbuild: NBuild = attrs.field(validator=attrs.validators.instance_of(NBuild), kw_only=True)
-    """Algorithm to build the neigborlist."""
+    """Algorithm to build the neighborlist."""
 
-    def compute(self, atpos: NDArray, cell_lengths: ArrayLike | float, nderiv: int = 0):
+    def compute(self, atpos: ArrayLike, cell_lengths: ArrayLike | float, nderiv: int = 0):
         """Compute microscopic properties related to the potential energy.
 
         Parameters
@@ -55,7 +58,7 @@ class ForceField:
         atpos
             Atomic positions, one atom per row.
             Array shape = (natom, 3).
-        cell_length
+        cell_lengths
             The length of the edge of the cubic simulation cell,
             or an array of lengths of three cell vectors.
         nderiv
@@ -68,6 +71,7 @@ class ForceField:
             A list containing the requested values.
         """
         # Bring neighborlist up to date.
+        atpos = parse_atpos(atpos)
         cell_lengths = self.nbuild.update(atpos, cell_lengths)
         nlist = self.nbuild.nlist
 
@@ -81,17 +85,31 @@ class ForceField:
         results.append(energy)
         if nderiv >= 1:
             nlist["gdelta"] = (nlist["gdist"] / nlist["dist"]).reshape(-1, 1) * nlist["delta"]
-            atfrc = np.zeros(atpos.shape, dtype=float)
-            np.subtract.at(atfrc, nlist["iatom1"], nlist["gdelta"])
-            np.add.at(atfrc, nlist["iatom0"], nlist["gdelta"])
+            # Accumulate pairwise forces on atoms, one Cartesian component at a time.
+            # (np.bincount is faster than the equivalent np.add.at and np.subtract.at.)
+            natom = len(atpos)
+            atfrc = np.stack(
+                [
+                    np.bincount(nlist["iatom0"], nlist["gdelta"][:, k], natom)
+                    - np.bincount(nlist["iatom1"], nlist["gdelta"][:, k], natom)
+                    for k in range(3)
+                ],
+                axis=1,
+            )
             results.append(atfrc)
             frc_press = -np.dot(nlist["gdist"], nlist["dist"]) / (3 * cell_lengths.prod())
             results.append(frc_press)
 
         return results
 
-    def try_move(self, iatom: int, delta: NDArray[float], cell_lengths: NDArray[float]):
+    def try_move(self, iatom: int, delta: ArrayLike, cell_lengths: ArrayLike | float):
         """Try moving one atom and compute the change in energy.
+
+        The energy change is computed with the pairwise energies stored in the neighborlist.
+        These are only up to date if no atoms were moved since the last call to `compute`,
+        except for moves accepted with `accept_move`.
+        Only pairs already present in the neighborlist are considered.
+        Pairs that come within range due to the move are missed.
 
         Parameters
         ----------
@@ -107,7 +125,7 @@ class ForceField:
         energy_change
             The change in energy due to the displacement of the atom.
         move
-            Information to passed on the method `accept_move` to upate the internal
+            Information to be passed on to the method `accept_move` to update the internal
             state of the force field after the move was accepted.
             When not calling `accept_move`, it is assumed that the move was rejected.
         """
@@ -130,10 +148,12 @@ class ForceField:
         """Update the internal state of the force field object after accepting a move.
 
         If a move is rejected, simply do not call this method.
+        This method only updates the neighborlist.
+        The caller must also apply the displacement to its own array of atomic positions.
 
         Parameters
         ----------
         move
-            The second return value the `try_move` method.
+            The second return value of the `try_move` method.
         """
         self.nbuild.nlist[move.select] = move.nlist

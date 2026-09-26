@@ -1,45 +1,72 @@
 # This workflow is adapted from:
 # https://packaging.python.org/en/latest/guides/publishing-package-distribution-releases-using-github-actions-ci-cd-workflows/
-# Changed made:
-# - Remove emoticons
-# - Update some actions to more recent versions
 
 name: release
-on: push
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+    paths:
+      # ... and only if relevant files have changed.
+      # (Path filters are ignored for tag pushes.)
+      - src/**
+      - pyproject.toml
+      - LICENSE.txt
+      - README.md
+      - CHANGELOG.md
+      - .github/extract-notes.sh
+      - .github/workflows/release.yaml
 
 env:
   # This is not critical
   # It is used only for showing URLs in GitHub Actions web interface.
   PYPI_NAME: tinyff
+  TITLE: TinyFF
 
 jobs:
   build:
     name: Build distribution
+    timeout-minutes: 2
     runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         fetch-depth: 0
     - name: Set up Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       with:
-        python-version: "3.11"
-    - name: Install pypa/build
-      run: >-
-        python -m pip install build
+        python-version: '3.11'
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v10.0.1
     - name: Build package
       run: >-
-        python -m build
+        uv build
     - name: Store the distribution packages
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: python-package-distributions
         path: dist/
+    - name: Run release notes script
+      run: >-
+        .github/extract-notes.sh
+        '${{ github.repository }}'
+        '${{ github.ref }}'
+    - name: Store the release notes
+      uses: actions/upload-artifact@v7
+      with:
+        name: release-notes
+        path: notes.md
 
   publish-to-pypi:
     name: Publish Python distribution to PyPI
-    if: startsWith(github.ref, 'refs/tags/')  # only publish to PyPI on tag pushes
+    timeout-minutes: 2
+    if: startsWith(github.ref, 'refs/tags/v')  # only publish to PyPI on tag pushes
     needs:
     - build
     runs-on: ubuntu-latest
@@ -47,11 +74,12 @@ jobs:
       name: pypi
       url: https://pypi.org/p/${{ env.PYPI_NAME }}
     permissions:
+      actions: read
       id-token: write
 
     steps:
     - name: Download all the dists
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v8
       with:
         name: python-package-distributions
         path: dist/
@@ -62,22 +90,28 @@ jobs:
     name: >-
       Sign the Python distribution with Sigstore
       and upload them to GitHub Release
+    timeout-minutes: 2
     needs:
     - publish-to-pypi
     runs-on: ubuntu-latest
 
     permissions:
+      actions: read
       contents: write
       id-token: write
 
     steps:
     - name: Download all the dists
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v8
       with:
         name: python-package-distributions
         path: dist/
+    - name: Download the release notes
+      uses: actions/download-artifact@v8
+      with:
+        name: release-notes
     - name: Sign the dists with Sigstore
-      uses: sigstore/gh-action-sigstore-python@v3
+      uses: sigstore/gh-action-sigstore-python@v3.3.0
       with:
         inputs: >-
           ./dist/*.tar.gz
@@ -86,9 +120,10 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ github.token }}
       run: >-
-        gh release create
-        '${{ github.ref_name }}'
+        gh release create '${{ github.ref_name }}'
         --repo '${{ github.repository }}'
+        --title '${{ env.TITLE }} ${{ github.ref_name }}'
+        --notes-file notes.md
     - name: Upload artifact signatures to GitHub Release
       env:
         GITHUB_TOKEN: ${{ github.token }}
@@ -97,12 +132,14 @@ jobs:
       # sigstore-produced signatures and certificates.
       run: >-
         gh release upload
-        '${{ github.ref_name }}' dist/**
+        '${{ github.ref_name }}'
+        dist/**
         --repo '${{ github.repository }}'
 
   publish-to-testpypi:
     name: Publish Python distribution to TestPyPI
-    if: ${{ github.ref == 'refs/heads/main' &&  github.repository_owner == 'molmod'}}
+    timeout-minutes: 2
+    if: ${{ github.ref == 'refs/heads/main' && github.repository_owner == 'molmod' }}
     needs:
     - build
     runs-on: ubuntu-latest
@@ -112,11 +149,12 @@ jobs:
       url: https://test.pypi.org/p/${{ env.PYPI_NAME }}
 
     permissions:
+      actions: read
       id-token: write
 
     steps:
     - name: Download all the dists
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v8
       with:
         name: python-package-distributions
         path: dist/

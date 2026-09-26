@@ -37,7 +37,9 @@ __all__ = (
 )
 
 
-def build_general_cubic_lattice(prim_frpos: ArrayLike, prim_length: float, nrep: int) -> NDArray:
+def build_general_cubic_lattice(
+    prim_frpos: ArrayLike, prim_length: float, nrep: int, *, _stacklevel: int = 2
+) -> NDArray:
     """Build a cubic simulation cell by repeating the primitive cell.
 
     Parameters
@@ -50,6 +52,9 @@ def build_general_cubic_lattice(prim_frpos: ArrayLike, prim_length: float, nrep:
         The number of times to repeat the primitive cell along each dimension.
         The primitive cell will thus be repeated `nrep**3` times.
         The cell length of the resulting cubic cell will be `prim_length * nrep`.
+    _stacklevel
+        For internal use only: the stack level of the warning for large `nrep`,
+        such that it points to the user code, also when called via other functions.
 
     Returns
     -------
@@ -60,7 +65,7 @@ def build_general_cubic_lattice(prim_frpos: ArrayLike, prim_length: float, nrep:
         warnings.warn(
             f"With nrep = {nrep}, the primitive cell is repeated nrep**3 = {nrep**3} times, "
             "which potentially causes memory issues.",
-            stacklevel=3,
+            stacklevel=_stacklevel,
         )
     prim_frpos = np.asarray(prim_frpos)
     if prim_frpos.ndim != 2:
@@ -74,19 +79,20 @@ def build_general_cubic_lattice(prim_frpos: ArrayLike, prim_length: float, nrep:
 
 
 def build_cubic_lattice(prim_length: float, nrep: int):
-    """Build a simple cubic lattice with given primitive cell length and number of repetitions."""
-    return build_general_cubic_lattice([[0.0, 0.0, 0.0]], prim_length, nrep)
+    """Build a simple cubic lattice with given primitive cell length and repetitions."""
+    return build_general_cubic_lattice([[0.0, 0.0, 0.0]], prim_length, nrep, _stacklevel=3)
 
 
 def build_bcc_lattice(prim_length: float, nrep: int):
-    """Build a simple cubic lattice with given primitive cell length and number of repetitions."""
-    return build_general_cubic_lattice([[0.0, 0.0, 0.0], [0.5, 0.5, 0.5]], prim_length, nrep)
+    """Build a body-centered cubic lattice with given primitive cell length and repetitions."""
+    prim_frpos = [[0.0, 0.0, 0.0], [0.5, 0.5, 0.5]]
+    return build_general_cubic_lattice(prim_frpos, prim_length, nrep, _stacklevel=3)
 
 
 def build_fcc_lattice(prim_length: float, nrep: int):
-    """Build a simple cubic lattice with given primitive cell length and number of repetitions."""
+    """Build a face-centered cubic lattice with given primitive cell length and repetitions."""
     prim_frpos = [[0.0, 0.0, 0.0], [0.0, 0.5, 0.5], [0.5, 0.0, 0.5], [0.5, 0.5, 0.0]]
-    return build_general_cubic_lattice(prim_frpos, prim_length, nrep)
+    return build_general_cubic_lattice(prim_frpos, prim_length, nrep, _stacklevel=3)
 
 
 def build_random_cell(
@@ -104,7 +110,7 @@ def build_random_cell(
         rng = np.random.default_rng()
     atpos0 = rng.uniform(0, cell_length, (natom, 3))
 
-    # Define cost function to push the atoms appart.
+    # Define cost function to push the atoms apart.
     if nbuild is None:
         nbuild = NBuildSimple(rcut)
     ff = ForceField([CheapRepulsion(rcut)], nbuild=nbuild)

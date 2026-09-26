@@ -1,4 +1,8 @@
 repos:
+- repo: https://github.com/Lucas-C/pre-commit-hooks
+  rev: v1.5.6
+  hooks:
+    - id: remove-crlf
 - repo: https://github.com/pre-commit/pre-commit-hooks
   rev: v6.0.0
   hooks:
@@ -20,15 +24,11 @@ repos:
     - id: pretty-format-json
       args: ["--autofix", "--no-sort-keys"]
     - id: trailing-whitespace
-- repo: https://github.com/Lucas-C/pre-commit-hooks
-  rev: v1.5.6
-  hooks:
-    - id: remove-crlf
 - repo: https://github.com/astral-sh/ruff-pre-commit
-  rev: v0.15.13
+  rev: v0.16.6
   hooks:
     - id: ruff-format
-    - id: ruff
+    - id: ruff-check
       args: ["--fix", "--show-fixes"]
 - repo: https://github.com/python-jsonschema/check-jsonschema
   rev: 0.37.2

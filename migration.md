@@ -1,8 +1,8 @@
 # Migration Guide
 
 This document lists changes you need to make when upgrading to a new version of TinyFF.
-Minor versions upgrades should maintain backward compatibility.
-Only when the major version changes, you may need to make changes to code using TinyFF
+Minor version upgrades should maintain backward compatibility.
+Only when the major version changes, you may need to make changes to code using TinyFF.
 
 
 ## Upgrading from TinyFF 1 to 2

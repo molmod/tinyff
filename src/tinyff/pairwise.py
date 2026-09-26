@@ -29,6 +29,8 @@ __all__ = ("CheapRepulsion", "CutOffWrapper", "LennardJones", "PairwiseTerm")
 
 @attrs.define
 class PairwiseTerm:
+    """Base class for pairwise interaction terms."""
+
     def compute_nlist(self, nlist: NDArray[NLIST_DTYPE], nderiv: int = 0):
         """Compute energies and derivatives and add them to the neighborlist.
 
@@ -61,6 +63,8 @@ class PairwiseTerm:
 
 @attrs.define
 class LennardJones(PairwiseTerm):
+    """The Lennard-Jones 12-6 pair potential."""
+
     epsilon: float = attrs.field(default=1.0, converter=float)
     sigma: float = attrs.field(default=1.0, converter=float)
 
@@ -83,6 +87,8 @@ class LennardJones(PairwiseTerm):
 
 @attrs.define
 class CutOffWrapper(PairwiseTerm):
+    """Truncate a pair potential at rcut, with energy and force shift to make it smooth."""
+
     original: PairwiseTerm = attrs.field()
     rcut: float = attrs.field(converter=float)
     ecut: float = attrs.field(init=False, default=0.0, converter=float)
@@ -97,32 +103,16 @@ class CutOffWrapper(PairwiseTerm):
         dist = np.asarray(dist, dtype=float)
         mask = dist < self.rcut
         results = []
-        if mask.ndim == 0:
-            # Deal with non-array case
-            if mask:
-                orig_results = self.original.compute(dist, nderiv)
-                energy = orig_results.pop(0)
-                energy -= self.ecut + self.gcut * (dist - self.rcut)
-                results.append(energy)
-                if nderiv >= 1:
-                    gdist = orig_results.pop(0)
-                    gdist -= self.gcut
-                    results.append(gdist)
-            else:
-                results.append(0.0)
-                if nderiv >= 1:
-                    results.append(0.0)
-        else:
-            orig_results = self.original.compute(dist, nderiv)
-            energy = orig_results.pop(0)
-            energy -= self.ecut + self.gcut * (dist - self.rcut)
-            energy *= mask
-            results.append(energy)
-            if nderiv >= 1:
-                gdist = orig_results.pop(0)
-                gdist -= self.gcut
-                gdist *= mask
-                results.append(gdist)
+        orig_results = self.original.compute(dist, nderiv)
+        energy = orig_results.pop(0)
+        energy -= self.ecut + self.gcut * (dist - self.rcut)
+        energy *= mask
+        results.append(energy)
+        if nderiv >= 1:
+            gdist = orig_results.pop(0)
+            gdist -= self.gcut
+            gdist *= mask
+            results.append(gdist)
         return results
 
 

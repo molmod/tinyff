@@ -20,7 +20,7 @@
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
-from scipy.signal import correlate
+from scipy.fft import irfft, next_fast_len, rfft
 
 from .neighborlist import NBuild
 
@@ -35,13 +35,18 @@ def compute_rdf(
     Parameters
     ----------
     traj_atpos
-        Configurational snaphots in a 3D array with shape `(nstep, natom, 3)`.
-    cell_length
-        The length of the edge of a cubic simulation cell.
+        Configurational snapshots in a 3D array with shape `(nstep, natom, 3)`.
+    cell_lengths
+        The length of the edge of a cubic simulation cell,
+        or an array of lengths of three cell vectors.
     spacing
-        The with of the bins of the histogram.
+        The width of the bins of the histogram.
     nbuild
         The neighborlist build algorithm for the computation of pairwise distances.
+        Its internal state is overwritten, so do not pass the `nbuild` of a `ForceField`
+        that is still in use.
+        Because snapshots in a trajectory are typically far apart in time,
+        it should be created with `nlist_reuse=0` (the default).
 
     Returns
     -------
@@ -50,6 +55,7 @@ def compute_rdf(
     rdf
         The radial distribution function at each bin midpoint.
     """
+    traj_atpos = np.asarray(traj_atpos, dtype=float)
     bins = np.arange(int(np.floor(nbuild.rmax / spacing)) + 1) * spacing
     counts = 0
     for atpos in traj_atpos:
@@ -64,7 +70,7 @@ def compute_rdf(
     return bin_mids, rho_pair / rho_pair0
 
 
-def compute_acf(traj_data):
+def compute_acf(traj_data: ArrayLike) -> NDArray[float]:
     """Compute the autocorrelation function of time-dependent data.
 
     Parameters
@@ -79,11 +85,15 @@ def compute_acf(traj_data):
         The autocorrelation function, as a function of time lag,
         at the same equidistant time steps of the input.
     """
+    traj_data = np.asarray(traj_data, dtype=float)
     traj_data = traj_data.reshape((traj_data.shape[0], -1))
-    acf = 0
-    for column in traj_data.T:
-        acf += correlate(column, column, mode="full")
-    acf = acf[traj_data.shape[0] - 1 :]
-    acf /= traj_data.shape[1]
-    acf /= np.arange(traj_data.shape[0], 0, -1)
+    nstep, ncol = traj_data.shape
+    # Zero padding to at least 2 * nstep - 1 avoids wrap-around in the circular correlation.
+    # The power spectra of all columns are summed before a single inverse transform.
+    size = next_fast_len(2 * nstep - 1, real=True)
+    spectra = rfft(traj_data, n=size, axis=0)
+    power = (spectra.real**2 + spectra.imag**2).sum(axis=1)
+    acf = irfft(power, n=size)[:nstep]
+    acf /= ncol
+    acf /= np.arange(nstep, 0, -1)
     return acf

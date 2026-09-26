@@ -72,7 +72,6 @@ def test_pairwise_force_field_three(nbuild):
 
     # Test forces with numdifftool
     forces2 = -nd.Gradient(lambda x: ff.compute(x.reshape(-1, 3), cell_length)[0])(atpos)
-    forces2.shape = (-1, 3)
     assert forces1 == pytest.approx(forces2.reshape(-1, 3))
 
     # Test pressure with numdifftool
@@ -120,7 +119,6 @@ def test_pairwise_force_field_fifteen(nbuild):
 
     # Test forces with numdifftool
     forces2 = -nd.Gradient(lambda x: ff.compute(x.reshape(-1, 3), cell_length)[0])(atpos)
-    forces2.shape = (-1, 3)
     assert forces1 == pytest.approx(forces2.reshape(-1, 3))
 
     # Test pressure with numdifftool
@@ -216,3 +214,12 @@ def test_try_accept_move_random(nbuild):
         energy_change, move = ff.try_move(iatom, delta, cell_length)
         assert abs((move.nlist["delta"] <= cell_length / 2).all())
         assert energy_change == pytest.approx(energy1 - energy0)
+
+
+def test_compute_atpos_list():
+    ff = ForceField([LennardJones()], nbuild=NBuildSimple(2.0))
+    atpos = [[0.0, 0.0, 0.0], [1.1, 0.0, 0.0]]
+    energy, atfrc, _ = ff.compute(atpos, 5.0, nderiv=1)
+    assert energy == pytest.approx(LennardJones().compute(1.1)[0])
+    assert atfrc.shape == (2, 3)
+    assert atfrc[0] == pytest.approx(-atfrc[1])

@@ -20,13 +20,12 @@
 
 This module supports two output formats:
 
-- Human readiable PDB trajectories (for nglview and mdtraj).
-- Directory of NPY files (for custom post-processing)
+- Human-readable PDB trajectories (for nglview and mdtraj).
+- Directory of NPY files (for custom post-processing).
 """
 
 import os
 from functools import partial
-from glob import glob
 from typing import TextIO
 
 import attrs
@@ -173,9 +172,9 @@ class PDBWriter:
     """Path of the PDB file to be written."""
 
     to_angstrom: float = attrs.field(converter=float, kw_only=True)
-    """Conversion factor to be multiplied with positions to get value in Angstrom, 1e-10 neter."""
+    """Conversion factor to be multiplied with positions to get values in Angstrom, 1e-10 meter."""
 
-    atnums: NDArray[float] = attrs.field(converter=partial(np.asarray, dtype=int), kw_only=True)
+    atnums: NDArray[int] = attrs.field(converter=partial(np.asarray, dtype=int), kw_only=True)
     """Atomic numbers of the atoms in the PDB file."""
 
     stride: int = attrs.field(
@@ -219,7 +218,7 @@ class PDBWriter:
             symbol = SYMBOLS[self.atnums[i] - 1]
             print(
                 f"HETATM{i + 1:5d} {symbol:2s}   ATM     1    {x:8.3f}{y:8.3f}{z:8.3f}"
-                f"  1.00  1.00          {symbol:2s}",
+                f"  1.00  1.00          {symbol:>2s}",
                 file=fh,
             )
         print("END", file=fh)
@@ -239,8 +238,8 @@ class NPYWriter:
     dir_out: str = attrs.field(converter=str)
     """Path of the output directory."""
 
-    fields: dict[str] = attrs.field(init=False, factory=dict)
-    """Fields to be written at every dump call."""
+    fields: dict[str, tuple[tuple[int, ...], np.dtype]] = attrs.field(init=False, factory=dict)
+    """Shape and dtype of each field, as given in the first dump call."""
 
     stride: int = attrs.field(
         default=1, kw_only=True, converter=int, validator=attrs.validators.gt(0)
@@ -252,11 +251,14 @@ class NPYWriter:
 
     def __attrs_post_init__(self):
         if os.path.isdir(self.dir_out):
-            for path in glob(os.path.join(self.dir_out, "*.npy")):
+            paths = [os.path.join(self.dir_out, name) for name in os.listdir(self.dir_out)]
+            if not all(path.endswith(".npy") and os.path.isfile(path) for path in paths):
+                raise RuntimeError(f"{self.dir_out} cannot be cleaned up: unexpected old contents.")
+            for path in paths:
                 os.unlink(path)
             os.rmdir(self.dir_out)
-        if os.path.exists(self.dir_out):
-            raise RuntimeError(f"{self.dir_out} cannot be cleaned up: unexpected old contents.")
+        elif os.path.exists(self.dir_out):
+            raise RuntimeError(f"{self.dir_out} exists and is not a directory.")
         os.makedirs(self.dir_out)
 
     def dump(self, **kwargs):
@@ -267,30 +269,23 @@ class NPYWriter:
 
     def dump_each(self, **kwargs):
         """Write data to NPY files without considering `self.stride`."""
-        converted = {}
+        converted = {key: np.asarray(value) for key, value in kwargs.items()}
         if len(self.fields) == 0:
             # No checking, just record the given shapes and types
-            for key, value in kwargs.items():
-                arvalue = np.asarray(value)
-                converted[key] = arvalue
-                self.fields[key] = (arvalue.shape, arvalue.dtype)
+            self.fields = {key: (value.shape, value.dtype) for key, value in converted.items()}
         else:
             # Check kwargs
-            if set(self.fields) != set(kwargs):
-                raise TypeError(
-                    f"Received keys: {list(kwargs.keys())}. Expected: {list(self.fields.keys())}"
-                )
-            for key, value in kwargs.items():
-                arvalue = np.asarray(value)
-                converted[key] = arvalue
+            if set(self.fields) != set(converted):
+                raise TypeError(f"Received keys: {list(converted)}. Expected: {list(self.fields)}")
+            for key, value in converted.items():
                 shape, dtype = self.fields[key]
-                if shape != arvalue.shape:
+                if shape != value.shape:
                     raise TypeError(
-                        f"The shape of {key}, {arvalue.shape}, differs from the first one, {shape}"
+                        f"The shape of {key}, {value.shape}, differs from the first one, {shape}"
                     )
-                if dtype != arvalue.dtype:
+                if dtype != value.dtype:
                     raise TypeError(
-                        f"The dtype of {key}, {arvalue.dtype}, differs from the first one, {dtype}"
+                        f"The dtype of {key}, {value.dtype}, differs from the first one, {dtype}"
                     )
 
         # Write only once all checks have passed

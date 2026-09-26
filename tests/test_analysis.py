@@ -45,3 +45,12 @@ def test_compute_vaf_simple():
     traj_atvel = rng.uniform(-1, 1, (100, 10, 3))
     acf = compute_acf(traj_atvel)
     assert acf.shape == (100,)
+
+
+def test_compute_acf_direct():
+    rng = np.random.default_rng(1)
+    traj_data = rng.normal(size=(50, 4, 3))
+    acf = compute_acf(traj_data)
+    flat = traj_data.reshape(50, -1)
+    expected = [(flat[: 50 - lag] * flat[lag:]).mean() for lag in range(50)]
+    assert acf == pytest.approx(expected)

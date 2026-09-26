@@ -37,13 +37,14 @@ def parse_atpos(atpos: ArrayLike, natom: int | None = None) -> NDArray[float]:
 
 
 def parse_cell_lengths(cell_lengths: ArrayLike, rmax: float = 0.0) -> NDArray[float]:
+    """Check and convert a cell lengths argument, and check its compatibility with rmax."""
     cell_lengths = np.asarray(cell_lengths, dtype=float)
     if cell_lengths.shape == ():
         cell_lengths = np.full(3, cell_lengths)
     elif cell_lengths.shape != (3,):
         raise TypeError("cell_lengths must have three elements.")
     if (cell_lengths <= 0).any():
-        raise ValueError("All cell lenghths must be positive.")
+        raise ValueError("All cell lengths must be positive.")
     if 2 * rmax > cell_lengths.min():
         raise ValueError("Too large maximum radius for the minimum image convention.")
     return cell_lengths

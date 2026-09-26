@@ -18,6 +18,8 @@
 # --
 """Basic Neighborlists."""
 
+from numbers import Integral
+
 import attrs
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
@@ -28,7 +30,7 @@ __all__ = ("NLIST_DTYPE", "NBuildCellLists", "NBuildSimple")
 
 
 NLIST_DTYPE = [
-    # First atoms.
+    # First atom.
     ("iatom0", int),
     # Second atom.
     ("iatom1", int),
@@ -60,17 +62,32 @@ class NBuild:
     nlist: NDArray[NLIST_DTYPE] | None = attrs.field(default=None, init=False)
     """The current neighborlist."""
 
-    nlist_reuse: int = attrs.field(converter=int, default=0, kw_only=True)
-    """Number of times the neighbor list is recomputed without rebuilding."""
+    nlist_reuse: int = attrs.field(
+        converter=int, default=0, kw_only=True, validator=attrs.validators.ge(0)
+    )
+    """Number of times a neighborlist is used before it is rebuilt.
+
+    After each rebuild, the pairs in the neighborlist are reused in
+    `nlist_reuse - 1` subsequent calls to `update`, in which only
+    the relative vectors and distances are recomputed.
+    With the default value (0), the neighborlist is rebuilt in every call to `update`.
+
+    When the pairs are reused, the neighborlist may contain pairs farther apart than `rmax`,
+    and it may miss pairs that have come closer than `rmax` since the last rebuild.
+    The pairwise terms must therefore have their own cutoff (e.g. with `CutOffWrapper`),
+    which is smaller than `rmax` by a margin
+    that exceeds how far atoms move in between two rebuilds.
+    Otherwise, the energy jumps at every rebuild.
+    """
 
     _nlist_use_count: int = attrs.field(converter=int, default=0, init=False)
-    """Internal counter to decide when to rebuild neigborlist."""
+    """Internal counter to decide when to rebuild the neighborlist."""
 
     _atom_cache: dict[int] = attrs.field(init=False, factory=dict)
 
     @property
     def nlist_use_count(self):
-        """The number of times the current neighborlist will be reused in future calculations."""
+        """The remaining number of uses of the current neighborlist, including the last one."""
         return self._nlist_use_count
 
     def update(self, atpos: ArrayLike, cell_lengths: ArrayLike) -> NDArray[float]:
@@ -82,7 +99,7 @@ class NBuild:
             Atomic positions, one atom per row.
             Array shape = (natom, 3).
         cell_lengths
-            The lengths of a periodic orthorombic box.
+            The lengths of a periodic orthorhombic box.
 
         Returns
         -------
@@ -91,16 +108,13 @@ class NBuild:
             guaranteed to be an array with three elements.
         """
         # Rebuild or recompute the neighborlist
-        if self._nlist_use_count <= 1:
-            self.nlist = None
-        else:
-            self._nlist_use_count -= 1
-        if self.nlist is None:
+        if self.nlist is None or self._nlist_use_count <= 1:
             cell_lengths = self._rebuild(atpos, cell_lengths)
             self._nlist_use_count = self.nlist_reuse
             self._atom_cache = {}
         else:
             cell_lengths = self._recompute(atpos, cell_lengths)
+            self._nlist_use_count -= 1
         return cell_lengths
 
     def _rebuild(self, atpos: ArrayLike, cell_lengths: ArrayLike) -> NDArray[float]:
@@ -117,7 +131,7 @@ class NBuild:
         self.nlist["delta"] = atpos[self.nlist["iatom1"]] - atpos[self.nlist["iatom0"]]
         self.nlist["dist"] = _apply_mic(self.nlist["delta"], cell_lengths)
 
-        # Reset outdated fields in the neigborlist.
+        # Reset outdated fields in the neighborlist.
         self.nlist["gdelta"] = 0.0
         self.nlist["gdist"] = 0.0
         self.nlist["energy"] = 0.0
@@ -126,6 +140,9 @@ class NBuild:
 
     def try_move(self, iatom: int, delta: NDArray[float], cell_lengths: ArrayLike | float):
         """Compute a subset of the neighborlist after displacing one atom.
+
+        Only pairs already present in the neighborlist are updated.
+        Pairs that come within range due to the displacement are not added.
 
         Parameters
         ----------
@@ -141,14 +158,17 @@ class NBuild:
         select
             The indexes of the global neighborlist that were updated.
         nlist
-            The modified subset of the neigborlist.
+            The modified subset of the neighborlist.
         """
-        if not isinstance(iatom, int):
+        if self.nlist is None:
+            raise RuntimeError("A neighborlist must be built before calling try_move.")
+        if not isinstance(iatom, Integral):
             raise TypeError("The argument iatom must be an integer.")
+        iatom = int(iatom)
         delta = np.asarray(delta, dtype=float)
         if delta.shape != (3,):
             raise TypeError("The displacement vector delta must have shape (3,).")
-        cell_lengths = parse_cell_lengths(cell_lengths)
+        cell_lengths = parse_cell_lengths(cell_lengths, self.rmax)
 
         # Find the related rows in the neighborlist
         info = self._atom_cache.get(iatom)
@@ -158,7 +178,7 @@ class NBuild:
             select = np.concatenate([select0, select1])
             signs = np.ones(len(select))
             signs[: len(select0)] = -1
-            signs.shape = (-1, 1)
+            signs = signs.reshape(-1, 1)
             self._atom_cache[iatom] = (select, signs)
         else:
             select, signs = info
@@ -177,10 +197,10 @@ def _apply_mic(deltas: NDArray[float], cell_lengths: NDArray[float]):
     ----------
     deltas
         Relative vectors to which the minimum image convention must be applied,
-        an array with shape (natom, 3) in which each row is one relative vector.
+        an array with shape (npair, 3) in which each row is one relative vector.
         The vectors are modified in place.
     cell_lengths
-        The lengths of a periodic orthorombic box.
+        The lengths of a periodic orthorhombic box.
 
     Returns
     -------
@@ -197,6 +217,8 @@ def _apply_mic(deltas: NDArray[float], cell_lengths: NDArray[float]):
 
 @attrs.define
 class NBuildSimple(NBuild):
+    """Simple quadratic-scaling neighborlist build, considering all pairs of atoms."""
+
     def _rebuild(self, atpos: ArrayLike, cell_lengths: ArrayLike):
         """Build the neighborlist array from scratch, possibly identifying new pairs."""
         # Parse parameters
@@ -206,7 +228,7 @@ class NBuildSimple(NBuild):
         # Generate arrays with all pairs below the cutoff.
         iatoms0, iatoms1, deltas, dists = _create_parts_self(atpos, None, cell_lengths, self.rmax)
 
-        # Apply cutoff and put everything in a fresh neigborlist.
+        # Put everything in a fresh neighborlist.
         self.nlist = np.zeros(len(dists), dtype=NLIST_DTYPE)
         self.nlist["iatom0"] = iatoms0
         self.nlist["iatom1"] = iatoms1
@@ -218,7 +240,16 @@ class NBuildSimple(NBuild):
 
 @attrs.define
 class NBuildCellLists(NBuild):
-    nbin_approx: float = attrs.field()
+    """Linear-scaling neighborlist build with the cell lists method."""
+
+    nbin_approx: float = attrs.field(converter=float, validator=attrs.validators.gt(0))
+    """The approximate number of bins in which the cell is divided, e.g. natom / 30.
+
+    Fewer bins imply more distance computations between atoms in nearby bins.
+    More bins imply more overhead of the Python loop over pairs of bins.
+    About 30 atoms per bin is usually a good compromise.
+    Irrespective of this setting, the bins are never smaller than `rmax`.
+    """
 
     def _rebuild(self, atpos: ArrayLike, cell_lengths: ArrayLike):
         """Build a neighborlist with linked cell algorithm."""
@@ -267,14 +298,14 @@ def _determine_nbins(cell_lengths: NDArray[float], rmax: float, nbin_approx: flo
     Parameters
     ----------
     cell_lengths
-        The lengths of a periodic orthorombic box.
+        The lengths of a periodic orthorhombic box.
     rmax
         The maximum distance between atoms in the neighborlist.
         It is guaranteed that the opposite faces of a bin are separated
         by a distance not less than rmax.
     nbin_approx
         The target number of bins, may be a floating point number.
-        For example, the number of atoms divided by 100.
+        For example, the number of atoms divided by 30.
 
     Returns
     -------
@@ -298,7 +329,7 @@ def _assign_atoms_to_bins(
         Atomic positions, one atom per row.
         Array shape = (natom, 3).
     cell_lengths
-        The lengths of a periodic orthorombic box.
+        The lengths of a periodic orthorhombic box.
     nbins
         The number of bins along each cell axis.
 
@@ -312,10 +343,11 @@ def _assign_atoms_to_bins(
         raise ValueError("The cutoff radius is too large for the given cell lengths.")
     idxs = np.floor(atpos / (cell_lengths / nbins)).astype(int) % nbins
     flat_idxs = (idxs[:, 0] * nbins[1] + idxs[:, 1]) * nbins[2] + idxs[:, 2]
-    _flat_unique, firsts, inverse = np.unique(flat_idxs, return_index=True, return_inverse=True)
+    order = np.argsort(flat_idxs, kind="stable")
+    _flat_unique, firsts = np.unique(flat_idxs[order], return_index=True)
     return {
-        tuple(int(idx) for idx in idxs[first]): (inverse == i).nonzero()[0]
-        for i, first in enumerate(firsts)
+        tuple(int(idx) for idx in idxs[order[first]]): atoms
+        for first, atoms in zip(firsts, np.split(order, firsts[1:]), strict=True)
     }
 
 
@@ -332,9 +364,9 @@ def _create_parts_self(
     bin0
         A list of atom indexes to consider (or None if all are relevant.)
     cell_lengths
-        The lengths of a periodic orthorombic box.
+        The lengths of a periodic orthorhombic box.
     rmax
-        The maximum radioius, i.e. the cut-off radius for the neighborlist.
+        The maximum radius, i.e. the cut-off radius for the neighborlist.
         Note that the corresponding sphere must fit in the simulation cell.
 
     Returns
@@ -346,16 +378,16 @@ def _create_parts_self(
     dists
         Distances between pairs.
     """
+    # All pairs with iatom0 < iatom1.
+    # (np.triu_indices is efficient for many atoms, but has too much overhead for small bins.)
     if bin0 is None:
-        natom = atpos.shape[0]
-        iatoms0 = np.tile(np.arange(natom), natom)
-        iatoms1 = np.repeat(np.arange(natom), natom)
+        iatoms0, iatoms1 = np.triu_indices(atpos.shape[0], 1)
     else:
         iatoms0 = np.tile(bin0, len(bin0))
         iatoms1 = np.repeat(bin0, len(bin0))
-    mask = iatoms0 < iatoms1
-    iatoms0 = iatoms0[mask]
-    iatoms1 = iatoms1[mask]
+        mask = iatoms0 < iatoms1
+        iatoms0 = iatoms0[mask]
+        iatoms1 = iatoms1[mask]
     deltas = atpos[iatoms1] - atpos[iatoms0]
     dists = _apply_mic(deltas, cell_lengths)
     mask = dists <= rmax
@@ -428,7 +460,7 @@ def _create_parts_nearby(
     cell_lengths
         The lengths of the periodic cell edges.
     rmax
-        The maximum radioius, i.e. the cut-off radius for the neighborlist.
+        The maximum radius, i.e. the cut-off radius for the neighborlist.
         Note that the corresponding sphere must fit in the simulation cell.
 
     Returns

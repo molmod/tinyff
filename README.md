@@ -1,10 +1,10 @@
-[![release](https://github.com/molmod/tinyff/actions/workflows/release.yaml/badge.svg)](https://github.com/molmod/tinyff/actions/workflows/release.yaml)
-[![pytest](https://github.com/molmod/tinyff/actions/workflows/pytest.yaml/badge.svg)](https://github.com/molmod/tinyff/actions/workflows/pytest.yaml)
-[![PyPI Version](https://img.shields.io/pypi/v/tinyff)](https://pypi.org/project/tinyff/)
-![PyPI - Python Version](https://img.shields.io/pypi/pyversions/tinyff)
-![GPL-3 License](https://img.shields.io/github/license/molmod/tinyff)
-
 # TinyFF
+
+[![release](https://github.com/molmod/tinyff/actions/workflows/release.yaml/badge.svg?branch=main)](https://github.com/molmod/tinyff/actions/workflows/release.yaml)
+[![pytest](https://github.com/molmod/tinyff/actions/workflows/pytest.yaml/badge.svg?branch=main)](https://github.com/molmod/tinyff/actions/workflows/pytest.yaml)
+[![PyPI Version](https://img.shields.io/pypi/v/tinyff)](https://pypi.org/project/tinyff/)
+[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/tinyff)](https://pypi.org/project/tinyff/)
+[![GPL-3 License](https://img.shields.io/github/license/molmod/tinyff)](https://github.com/molmod/tinyff/blob/main/LICENSE.txt)
 
 This is a minimalistic force-field engine written in pure Python,
 using vectorized NumPy code.
@@ -19,28 +19,22 @@ skipping the technicalities of implementing the correct
 potential energy, pressure and forces acting on atoms.
 
 TinyFF is written by Toon Verstraelen for students of the
-[Computational Physics course (C004504)](https://studiekiezer.ugent.be/2024/studiefiche/en/C004504) in the
-[Physics and Astronomy program](https://studiekiezer.ugent.be/2024/master-of-science-in-physics-and-astronomy-CMPHYS-en/programma) at
+[Computational Physics course (C004504)](https://studiekiezer.ugent.be/2026/studiefiche/en/C004504) in the
+[Physics and Astronomy program](https://studiekiezer.ugent.be/2026/master-of-science-in-physics-and-astronomy-CMPHYS-en) at
 [Ghent University](https://www.ugent.be/).
-TinyFF is distributed under the conditions of the GPL-v3 license.
+TinyFF is distributed under the conditions of the
+[GPL-v3 license](https://github.com/molmod/tinyff/blob/main/LICENSE.txt).
 
 
 ## Installation
 
-TinyFF is available on PyPI.
+TinyFF is available on [PyPI](https://pypi.org/project/tinyff/) and requires Python 3.11 or newer.
 In a properly configured Python virtual environment,
 you can install TinyFF with:
 
 ```bash
 pip install tinyff
 ```
-
-## Migration from older versions
-
-Code written for TinyFF 1 can be easily updated to work with TinyFF 2.
-All required changes are documented in the [Migration Guide](migration.md).
-
-A complete list of changes can be found in [CHANGELOG.md](CHANGELOG.md).
 
 
 ## Features
@@ -50,7 +44,7 @@ TinyFF is a Python package with the following modules:
 - `tinyff.analysis`: helper functions to compute a radial distribution function
   and an autocorrelation function.
 - `tinyff.atomsmithy`: functions for creating initial atomic positions.
-- `tinyff.forcefield`: implements a general force field interface: energy, atomic forces and pressure
+- `tinyff.forcefield`: implements a general force field interface: energy, atomic forces and pressure.
 - `tinyff.pairwise`: pairwise potentials to be used in force fields.
 - `tinyff.neighborlist`: used by the `forcefield` module to compute pairwise interactions
   with a real-space cut-off.
@@ -87,10 +81,10 @@ atpos = np.array([[0.0, 0.0, 1.0], [1.0, 2.0, 0.0]])
 cell_length = 20.0
 
 # Compute a selection of results with ff.compute.
-#   The ff.compute method has an `nderiv` arguments to compute only some results:
+#   The ff.compute method has an `nderiv` argument to compute only some results:
 #   - `nderiv=0` (default): compute only the energy
 #   - `nderiv=1`: compute the energy, forces and force contribution to the pressure.
-#   Requested results are put in a list, even in only one result is requested.
+#   Requested results are put in a list, even if only one result is requested.
 potential_energy, forces, press = ff.compute(atpos, cell_length, nderiv=1)
 ```
 
@@ -103,11 +97,15 @@ into the `ForceField` constructor:
     ```python
     from tinyff import NBuildCellLists
 
-    # Construct your force field object as follows:
-    ff = ForceField([lj], nbuild=NBuildCellLists(rcut, nbin_approx=natom / 100))
+    # Construct your force field object as follows,
+    # aiming for about 30 atoms per bin:
+    natom = len(atpos)
+    ff = ForceField([lj], nbuild=NBuildCellLists(rcut, nbin_approx=natom / 30))
     ```
 
-    For about 430 atoms, this becomes more efficient than the simple neighborlist build.
+    Depending on the density and the cutoff radius,
+    this becomes more efficient than the simple neighborlist build
+    for systems with more than a few hundred atoms.
 
 - [Verlet lists](https://en.wikipedia.org/wiki/Verlet_list) (cut-off radius + buffer):
 
@@ -119,7 +117,7 @@ into the `ForceField` constructor:
 
 ### Forging initial positions
 
-The `atomsmithy` defines functions to generate a cubic box
+The `atomsmithy` module defines functions to generate a cubic box
 with standard lattices or randomized atomic positions:
 
 ```python
@@ -140,6 +138,7 @@ atpos = build_fcc_lattice(2.5, 4)
 # Randomize positions. args:
 # - cell edge length
 # - number of atoms
+# - cutoff radius of the repulsive potential used to avoid close contacts
 atpos = build_random_cell(10.0, 32, 2.5)
 ```
 
@@ -154,17 +153,19 @@ from tinyff import PDBWriter
 # Initialization of the writer: specify a file and a conversion factor to angstrom.
 # If the PDB file exists, it is overwritten!
 # This example shows the conversion factor when your program works in nanometer.
-# Through `atnums` you can specify the chemical elements, here 50 argon atoms (Z=18).
-pdb_writer = PDBWriter("trajectory.pdb", to_angstrom=10.0, atnums=[18] * 50)
+# Through `atnums` you can specify the chemical elements, here all argon atoms (Z=18).
+pdb_writer = PDBWriter("trajectory.pdb", to_angstrom=10.0, atnums=[18] * len(atpos))
 
 # Somewhere in your code, typically inside some loop.
 # cell_length(s) can be a float or an array of 3 floats.
 pdb_writer.dump(atpos, cell_length)
 
-# If you are using Jupyter, you can visualize the trajectory with nglview as follows:
+# If you are using Jupyter, you can visualize the trajectory with nglview as follows.
+# (mdtraj and nglview are not TinyFF dependencies: install them with `pip install mdtraj nglview`.)
 import mdtraj
 import nglview
-traj = mdtraj.load(f"trajectory.pdb")
+
+traj = mdtraj.load("trajectory.pdb")
 view = nglview.show_mdtraj(traj)
 view.clear()
 view.add_hyperball()
@@ -182,18 +183,20 @@ The `NPYWriter` can be used as follows:
 ```python
 from tinyff import NPYWriter
 
-# Initialization, will create (and possibly clean up an existing) a `traj` directory.
+# Initialization, will create a `traj` directory.
+# An existing `traj` directory is removed first, but only if it contains nothing but NPY files.
+# Otherwise, an error is raised.
 npy_writer = NPYWriter("traj")
 
 # Somewhere in your production code, normally inside some loop.
-# You can specify any array or float you like,
-# as long as the shape and type is the same upon every call.
+# You can specify any array or float you like as keyword arguments,
+# as long as the shape and type are the same upon every call.
 # This will result in files `traj/atpos.npy`, `traj/pressure.npy`, etc.
 # These files will contain arrays with data passed into all `dump` calls.
-npy_writer.dump(atpos=atpos, pressure=pressure, temperature=temperature, ...)
+npy_writer.dump(atpos=atpos, pressure=pressure, temperature=temperature)
 
 # In your post-processing code
-pressure = np.load("traj/pressure.npz")
+pressure = np.load("traj/pressure.npy")
 print(np.mean(pressure))
 ```
 
@@ -230,7 +233,7 @@ You can use these function calls in your Monte Carlo loop:
 import numpy as np
 from tinyff import build_fcc_lattice, CutOffWrapper, LennardJones, ForceField, NBuildSimple
 
-# System configuration, a simple (inflated) FCC lattice of Argon atoms.
+# System configuration, a simple (inflated) FCC lattice of argon atoms.
 atpos = build_fcc_lattice(2.5, 4)
 cell_lengths = np.array([10.0, 10.0, 10.0])
 rmax = 3.0
@@ -239,7 +242,7 @@ rcut = 2.5
 # Define the force field and compute the initial energy.
 lj = CutOffWrapper(LennardJones(2.5, 2.0), rcut)
 ff = ForceField([lj], nbuild=NBuildSimple(rmax))
-energy0, = ff.compute(atpos, cell_length)
+(energy0,) = ff.compute(atpos, cell_lengths)
 
 # Try and accept a move of atom 3.
 iatom = 3
@@ -249,6 +252,16 @@ ff.accept_move(move)
 atpos[iatom] += delta
 
 # Verify the change in energy.
-energy1, = ff.compute(atpos, cell_length)
+(energy1,) = ff.compute(atpos, cell_lengths)
 assert abs(energy_change - (energy1 - energy0)) < 1e-10
 ```
+
+
+## Migration from older versions
+
+Code written for TinyFF 1 can be easily updated to work with TinyFF 2.
+All required changes are documented in the
+[Migration Guide](https://github.com/molmod/tinyff/blob/main/migration.md).
+
+A complete list of changes can be found in the
+[Changelog](https://github.com/molmod/tinyff/blob/main/CHANGELOG.md).

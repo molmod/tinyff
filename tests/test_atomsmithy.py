@@ -25,6 +25,7 @@ from tinyff.atomsmithy import (
     build_bcc_lattice,
     build_cubic_lattice,
     build_fcc_lattice,
+    build_general_cubic_lattice,
     build_random_cell,
 )
 from tinyff.neighborlist import NBuildSimple
@@ -113,3 +114,15 @@ def test_random_box():
     nbuild = NBuildSimple(rmax=4.0)
     nbuild.update(atpos, [10.0, 10.0, 10.0])
     assert nbuild.nlist["dist"].min() > 2.0
+
+
+def test_large_nrep_warning_general():
+    with pytest.warns(UserWarning, match="nrep") as record:
+        build_general_cubic_lattice([[0.0, 0.0, 0.0]], 1.0, 31)
+    assert record[0].filename == __file__
+
+
+def test_large_nrep_warning_fcc():
+    with pytest.warns(UserWarning, match="nrep") as record:
+        build_fcc_lattice(1.0, 31)
+    assert record[0].filename == __file__

@@ -405,3 +405,8 @@ def test_nlist_reuse(nbuild):
     nbuild.update(atpos, cell_length)
     assert nbuild.nlist_use_count == 3
     assert len(nbuild.nlist) == 0
+
+
+def test_nlist_reuse_negative():
+    with pytest.raises(ValueError):
+        NBuildSimple(1.0, nlist_reuse=-1)
