@@ -8,8 +8,8 @@
 
 This is a minimalistic force-field engine written in pure Python,
 using vectorized NumPy code.
-It has minimal dependencies (NumPy, SciPy, attrs and npy-append-array),
-so all the force-field specific code is self-contained.
+It has just a few dependencies (NumPy, SciPy, attrs and npy-append-array),
+and all the force-field specific code is self-contained.
 
 This little library is geared towards teaching and favors simplicity and conciseness
 over fancy features and top-notch performance.
